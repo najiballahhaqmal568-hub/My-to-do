@@ -144,9 +144,12 @@ export function App({ core }: { core: TaskCore }) {
   linkRef.current = handleLink;
   useEffect(() => {
     notifications.onOpen((l) => linkRef.current(l));
+    // The bedtime summary is on by default, so ask for notification permission on first launch.
+    // Exact alarms are asked for later, with the first task reminder.
+    if (core.settings.bedtimeEnabled) notifications.ensurePermission(false);
     if (location.hash.length > 1) linkRef.current(decodeURIComponent(location.hash.slice(1)));
     if (!navigator.webdriver) refreshUpdate();
-  }, []);
+  }, [core]);
 
   // Android back button: close the top layer first.
   const layers = useRef({ dialog, editor, catEditor, stack });

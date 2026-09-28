@@ -17,6 +17,7 @@ const CHANNEL = 'reminders';
 class NativeNotifications implements NotificationAdapter {
   private queue: Promise<void> = Promise.resolve();
   private channelReady: Promise<void> | null = null;
+  private lastPlan: PlannedNotification[] = [];
 
   private channel() {
     this.channelReady ??= LocalNotifications.createChannel({
@@ -31,6 +32,7 @@ class NativeNotifications implements NotificationAdapter {
   }
 
   apply(plan: PlannedNotification[]): Promise<void> {
+    this.lastPlan = plan;
     this.queue = this.queue
       .then(async () => {
         const perm = await LocalNotifications.checkPermissions();
@@ -64,6 +66,8 @@ class NativeNotifications implements NotificationAdapter {
     if (perm.display === 'prompt' || perm.display === 'prompt-with-rationale') perm = await LocalNotifications.requestPermissions();
     if (perm.display !== 'granted') return false;
     if (askExact && !(await this.exactAllowed())) await this.openExactSettings();
+    // Anything planned before permission was granted was skipped; schedule it now.
+    await this.apply(this.lastPlan);
     return true;
   }
 
