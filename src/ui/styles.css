@@ -37,8 +37,9 @@
   --inbox-c: #5b645e;
 }
 
+/* Dark palette: follows the system, or the phone's setting reported by the Android app (data-theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     color-scheme: dark;
     --bg: #0e1210;
     --surface: #1a201c;
@@ -74,6 +75,41 @@
     --inbox-c: #3d4540;
   }
 }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1210;
+  --surface: #1a201c;
+  --surface-2: #161c18;
+  --ink: #e1e7e2;
+  --muted: #9fa9a2;
+  --line: #2b332e;
+  --accent: #8ad4b3;
+  --on-accent: #05281a;
+  --danger: #ff917c;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --hero-1: #165240;
+  --hero-2: #2a3a94;
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  --green: #3db47e;
+  --green-c: #1f7a51;
+  --orange: #e8922b;
+  --orange-c: #a95d00;
+  --indigo: #8792ff;
+  --indigo-c: #3e4bb8;
+  --rose: #f06595;
+  --rose-c: #a61e4d;
+  --teal: #3bc9db;
+  --teal-c: #0b6b73;
+  --violet: #b197fc;
+  --violet-c: #6139b0;
+  --amber: #fcc419;
+  --amber-c: #8f6b00;
+  --sky: #74c0fc;
+  --sky-c: #1864ab;
+  --inbox: #9fa9a2;
+  --inbox-c: #3d4540;
+  }
 
 .c-green { --cat: var(--green); --cc: var(--green-c); }
 .c-orange { --cat: var(--orange); --cc: var(--orange-c); }
