@@ -20,8 +20,13 @@ const shot = (name) => sh(`adb exec-out screencap -p > ${OUT}/${name}.png`);
 let device;
 async function connect() {
   if (!device) [device] = await android.devices({ omitDriverInstall: true });
-  const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
-  const page = await webview.page();
+  let page;
+  for (let i = 0; i < 20; i++) {
+    const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
+    page = await webview.page();
+    if (!page.isClosed()) break;
+    await sleep(1000);
+  }
   return { browser: { close: async () => undefined }, page };
 }
 
@@ -60,6 +65,9 @@ check(alarms.includes(PKG), 'Android has alarms scheduled for the app');
 // Back button closes an open sheet instead of leaving the app.
 await tap(page.getByTestId('fab'));
 await page.locator('#task-title').waitFor();
+await sleep(800);
+await blur(page);
+await sleep(800);
 sh('adb shell input keyevent KEYCODE_BACK');
 await sleep(1500);
 check((await page.locator('#task-title').count()) === 0, 'back button closes the task sheet');
@@ -84,7 +92,8 @@ sh('adb shell cmd statusbar expand-notifications');
 await sleep(2000);
 shot('5-notification');
 sh('adb shell cmd statusbar collapse');
-await sleep(1000);
+await sleep(1500);
+({ browser, page } = await connect());
 
 // Export opens Android's share sheet.
 await tap(page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }));

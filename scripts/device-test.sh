@@ -17,7 +17,9 @@ adb logcat -d > device-shots/logcat.txt
 for name in 1-dashboard 2-editor 5-notification 8-dark; do
   f=device-shots/$name.png
   [ -f "$f" ] || continue
-  convert "$f" -resize 300x -quality 45 "/tmp/$name.jpg" 2>/dev/null || continue
+  if command -v magick >/dev/null; then magick "$f" -resize 280x -quality 40 "/tmp/$name.jpg"
+  elif command -v convert >/dev/null; then convert "$f" -resize 280x -quality 40 "/tmp/$name.jpg"
+  else python3 -c "import sys" && echo "[img] no image converter on this runner" && break; fi
   base64 -w 4000 "/tmp/$name.jpg" | sed "s/^/[img $name] /"
 done
 if grep -q "FATAL EXCEPTION" device-shots/logcat.txt; then
