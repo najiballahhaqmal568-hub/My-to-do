@@ -1,6 +1,6 @@
 // Drives the real app inside the Android emulator's WebView over the Chrome DevTools protocol.
 import { execSync } from 'node:child_process';
-import { chromium } from 'playwright-core';
+import { _android as android } from 'playwright-core';
 
 const PKG = 'app.mytodo.personal';
 const OUT = 'device-shots';
@@ -14,26 +14,12 @@ const check = (ok, what) => {
 };
 const shot = (name) => sh(`adb exec-out screencap -p > ${OUT}/${name}.png`);
 
+let device;
 async function connect() {
-  for (let i = 0; i < 60; i++) {
-    const m = sh('adb shell cat /proc/net/unix').match(/@(webview_devtools_remote_\d+)/);
-    if (m) {
-      sh('adb forward --remove-all');
-      sh(`adb forward tcp:9222 localabstract:${m[1]}`);
-      try {
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
-        for (let j = 0; j < 30; j++) {
-          const page = browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().startsWith('https://localhost'));
-          if (page) return { browser, page };
-          await sleep(1000);
-        }
-      } catch (e) {
-        log('connect retry', String(e).slice(0, 120));
-      }
-    }
-    await sleep(1000);
-  }
-  throw new Error('could not reach the app WebView');
+  if (!device) [device] = await android.devices({ omitDriverInstall: true });
+  const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
+  const page = await webview.page();
+  return { browser: { close: async () => undefined }, page };
 }
 
 const errors = [];
@@ -116,6 +102,7 @@ await browser.close().catch(() => undefined);
 sh('adb shell cmd uimode night yes');
 sh(`adb shell am force-stop ${PKG}`);
 sh(`adb shell am start -W -n ${PKG}/.MainActivity`);
+await sleep(4000);
 ({ browser, page } = await connect());
 await page.getByTestId('dashboard').waitFor({ timeout: 30000 });
 await sleep(2500);
