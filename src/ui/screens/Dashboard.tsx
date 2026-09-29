@@ -106,6 +106,22 @@ export function Dashboard() {
         </div>
       )}
 
+      {d.undated.length > 0 && (
+        <section data-testid="undated">
+          <h2 className="section-h">
+            {t.noDate}
+            <span>{t.taskCount(d.undated.length)}</span>
+          </h2>
+          <div className="list">
+            <AnimatePresence initial={false}>
+              {d.undated.map((task) => (
+                <TaskRow key={task.id} task={task} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
+      )}
+
       <section className="tomorrow" id="tomorrow" data-testid="tomorrow">
         <div className="tomorrow-h">
           <div>

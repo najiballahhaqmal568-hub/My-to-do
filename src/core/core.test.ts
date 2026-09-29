@@ -96,6 +96,20 @@ describe('sorting', () => {
   });
 });
 
+describe('tasks without a date', () => {
+  it('shows open undated tasks on the dashboard and counts them on category cards', () => {
+    core.addTask({ title: 'سفارش جنس', categoryId: 'shop' });
+    const done = core.addTask({ title: 'قدیمی', categoryId: 'shop' });
+    core.setDone(done.id, true);
+    core.addTask({ title: 'امروز', categoryId: 'shop', due: '2026-09-28' });
+    const d = core.dashboard();
+    expect(titles(d.undated)).toEqual(['سفارش جنس']);
+    expect(titles(d.tasks)).toEqual(['امروز']);
+    expect(d.progress).toEqual({ done: 0, total: 1 });
+    expect(d.categories.find((c) => c.categoryId === 'shop')).toMatchObject({ left: 2, total: 2 });
+  });
+});
+
 describe('categories and Inbox', () => {
   it('reports remaining work per category on the dashboard', () => {
     const a = core.addTask({ title: 'run', categoryId: 'sport', due: '2026-09-28' });
