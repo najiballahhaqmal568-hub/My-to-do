@@ -108,7 +108,21 @@ log('top activity:', top.trim());
 sh('adb shell input keyevent KEYCODE_BACK');
 await sleep(1500);
 
-check(errors.length === 0, `no JavaScript errors (${errors.slice(0, 3).join(' | ')})`);
+// Cancelling the share sheet is reported by Capacitor as an error; that is expected here.
+const realErrors = errors.filter((e) => !/Share canceled/i.test(e));
+check(realErrors.length === 0, `no JavaScript errors (${realErrors.slice(0, 3).join(' | ')})`);
+
+// Dark mode switched while the app is open.
+const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+const lightBg = await bg();
+sh('adb shell cmd uimode night yes');
+await sleep(3000);
+const darkBg = await bg();
+check(darkBg === 'rgb(14, 18, 16)', `dark mode applies while the app is open (${lightBg} -> ${darkBg})`);
+shot('8-dark');
+sh('adb shell cmd uimode night no');
+await sleep(3000);
+check((await bg()) === lightBg, 'light mode comes back when the phone switches back');
 await browser.close().catch(() => undefined);
 
 // Dark mode follows the phone.
@@ -119,8 +133,8 @@ await sleep(4000);
 ({ browser, page } = await connect());
 await page.getByTestId('dashboard').waitFor({ timeout: 30000 });
 await sleep(2500);
-check(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches), 'dark mode follows the phone setting');
-shot('8-dark');
+check((await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(14, 18, 16)', 'dark mode applies when the app starts in dark mode');
+shot('9-dark-restart');
 check((await page.getByTestId('task-row').count()) === 1, 'the task survived an app restart');
 await browser.close().catch(() => undefined);
 sh('adb shell cmd uimode night no');
