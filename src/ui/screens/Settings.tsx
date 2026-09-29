@@ -3,6 +3,7 @@ import { CoreError } from '../../core/core';
 import { digits } from '../../i18n';
 import { notifications } from '../../platform/notifications';
 import { APP_VERSION, isNative, keepPrivateBackup, shareFile } from '../../platform/device';
+import { TimeField } from '../components/TimeField';
 import { refreshUpdate, useUpdate } from '../components/UpdateBanner';
 import { useApp } from '../context';
 import { Icon } from '../icons';
@@ -91,17 +92,10 @@ export function Settings() {
         </div>
         {s.bedtimeEnabled && (
           <div className="card-row">
-            <label className="grow" htmlFor="bedtime-time">
+            <label className="grow" htmlFor="bedtime-time-hour">
               {t.bedtimeTime}
             </label>
-            <input
-              id="bedtime-time"
-              className="input"
-              style={{ width: 130 }}
-              type="time"
-              value={s.bedtimeTime}
-              onChange={(e) => e.target.value && core.updateSettings({ bedtimeTime: e.target.value })}
-            />
+            <TimeField id="bedtime-time" value={s.bedtimeTime} onChange={(v) => v && core.updateSettings({ bedtimeTime: v })} />
           </div>
         )}
         {isNative && !exact && (

@@ -12,13 +12,20 @@ async function open(page: Page, hash = '') {
   await expect(page.getByTestId('dashboard')).toBeVisible();
 }
 
+/** Picks a time in the 12-hour picker, given as 24-hour `HH:MM`. */
+async function setTime(page: Page, time: string) {
+  const [h, m] = time.split(':');
+  await page.locator('#task-time-hour').selectOption(h);
+  await page.locator('#task-time-minute').selectOption(m);
+}
+
 async function addTask(page: Page, title: string, opts: { category?: string; priority?: string; repeat?: string; subtask?: string; time?: string; reminder?: string } = {}) {
   await page.getByTestId('fab').click();
   await page.locator('#task-title').fill(title);
   if (opts.category) await page.getByRole('dialog').getByRole('button', { name: opts.category }).click();
   if (opts.priority) await page.getByRole('dialog').getByRole('button', { name: opts.priority, exact: true }).click();
   if (opts.repeat) await page.getByRole('dialog').getByRole('button', { name: opts.repeat, exact: true }).click();
-  if (opts.time) await page.locator('#task-time').fill(opts.time);
+  if (opts.time) await setTime(page, opts.time);
   if (opts.reminder) await page.getByRole('dialog').getByRole('button', { name: opts.reminder, exact: true }).click();
   if (opts.subtask) await page.getByRole('dialog').getByPlaceholder('زیرکار جدید').fill(opts.subtask);
   await page.getByRole('button', { name: 'ذخیره' }).click();
@@ -115,7 +122,7 @@ test('a reminder and the bedtime summary are planned', async ({ page }) => {
   await page.locator('#task-title').fill('کلاس');
   await page.getByTestId('date-field').click();
   await page.getByRole('dialog').getByRole('button', { name: 'فردا', exact: true }).click();
-  await page.locator('#task-time').fill('16:00');
+  await setTime(page, '16:00');
   await page.getByRole('dialog').getByRole('button', { name: '۱۵ دقیقه قبل' }).click();
   await page.getByRole('button', { name: 'ذخیره' }).click();
   await expect
@@ -177,4 +184,29 @@ test('tasks without a date appear in their own dashboard section', async ({ page
   await page.getByRole('dialog').getByRole('button', { name: 'بدون تاریخ', exact: true }).click();
   await page.getByRole('button', { name: 'ذخیره' }).click();
   await expect(page.getByTestId('undated')).toContainText('بی‌تاریخ');
+});
+
+test('shows times on the 12-hour clock in Dari and lets the user pick them that way', async ({ page }) => {
+  await open(page);
+  await addTask(page, 'صبحانه', { time: '06:30' });
+  await addTask(page, 'ناهار', { time: '12:00' });
+  await addTask(page, 'بازار', { time: '16:45' });
+  await addTask(page, 'حساب', { time: '20:30' });
+  await expect(row(page, 'صبحانه')).toContainText('۶:۳۰ صبح');
+  await expect(row(page, 'ناهار')).toContainText('۱۲:۰۰ ظهر');
+  await expect(row(page, 'بازار')).toContainText('۴:۴۵ بعدازظهر');
+  await expect(row(page, 'حساب')).toContainText('۸:۳۰ شب');
+  await row(page, 'حساب').getByText('حساب').click();
+  await expect(page.locator('#task-time-hour')).toHaveValue('20');
+  await expect(page.locator('#task-time-hour').locator('option:checked')).toHaveText('۸ شب');
+  await page.getByRole('dialog').getByRole('button', { name: 'ذخیره' }).click();
+});
+
+test('the bedtime time is chosen on the 12-hour clock too', async ({ page }) => {
+  await open(page);
+  await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
+  await page.locator('#bedtime-time-hour').selectOption('21');
+  await page.locator('#bedtime-time-minute').selectOption('30');
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByText('اعلان فردا ۹:۳۰ شب')).toBeVisible();
 });
