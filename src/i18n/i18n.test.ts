@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MESSAGES, digits, formatDay, formatDayShort, formatTime, repeatLabel } from '.';
+import { MESSAGES, digits, formatDay, formatDayShort, formatTime, hourLabel, repeatLabel } from '.';
 
 describe('Persian dates', () => {
   it('uses Afghan month names and Persian digits', () => {
@@ -14,10 +14,27 @@ describe('Persian dates', () => {
     expect(formatDay('en', '2026-09-28')).toBe('Monday, September 28');
   });
 
-  it('formats times without a leading zero', () => {
-    expect(formatTime('fa', '06:30')).toBe('۶:۳۰');
-    expect(formatTime('en', '20:05')).toBe('20:05');
+  it('shows times on the 12-hour clock with the Dari part of the day', () => {
+    expect(formatTime('fa', '06:30')).toBe('۶:۳۰ صبح');
+    expect(formatTime('fa', '12:00')).toBe('۱۲:۰۰ ظهر');
+    expect(formatTime('fa', '13:15')).toBe('۱:۱۵ بعدازظهر');
+    expect(formatTime('fa', '17:45')).toBe('۵:۴۵ شام');
+    expect(formatTime('fa', '20:30')).toBe('۸:۳۰ شب');
+    expect(formatTime('fa', '23:59')).toBe('۱۱:۵۹ شب');
+    expect(formatTime('fa', '00:05')).toBe('۱۲:۰۵ شب');
     expect(digits('fa', 1405)).toBe('۱۴۰۵');
+  });
+
+  it('shows English times with AM and PM', () => {
+    expect(formatTime('en', '20:05')).toBe('8:05 PM');
+    expect(formatTime('en', '00:30')).toBe('12:30 AM');
+    expect(formatTime('en', '12:00')).toBe('12:00 PM');
+  });
+
+  it('labels whole hours for the picker', () => {
+    expect(hourLabel('fa', 4)).toBe('۴ صبح');
+    expect(hourLabel('fa', 0)).toBe('۱۲ شب');
+    expect(hourLabel('en', 15)).toBe('3 PM');
   });
 
   it('names weekday repeats starting from Saturday', () => {

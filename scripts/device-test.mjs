@@ -48,15 +48,24 @@ check(true, 'dashboard renders on the device');
 check((await page.getByText('نسخهٔ جدید آماده است').count()) > 0, 'update check finds the newer GitHub release');
 shot('1-dashboard');
 
-// A task with a reminder three minutes from now.
-const when = await page.evaluate(() => {
-  const d = new Date(Date.now() + 3 * 60000);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}`;
-});
+// A task with a reminder a few minutes from now. The picker offers five-minute steps, so use the
+// next step at least two minutes ahead (and wait out midnight, when the date would change).
+const nextStep = () =>
+  page.evaluate(() => {
+    const d = new Date(Date.now() + 2 * 60000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+    const p = (n) => String(n).padStart(2, '0');
+    return { hour: p(d.getHours()), minute: p(d.getMinutes()), sameDay: d.getDate() === new Date().getDate() };
+  });
+let step = await nextStep();
+if (!step.sameDay) {
+  await sleep(6 * 60000);
+  step = await nextStep();
+}
 await tap(page.getByTestId('fab'));
 await page.locator('#task-title').fill('آزمایش یادآوری');
-await page.locator('#task-time').fill(when);
+await page.locator('#task-time-hour').selectOption(step.hour);
+await page.locator('#task-time-minute').selectOption(step.minute);
 await blur(page);
 await tap(page.getByRole('dialog').getByRole('button', { name: 'سر وقت', exact: true }));
 await tap(page.getByRole('dialog').getByRole('button', { name: '🏃 ورزش' }));
@@ -90,7 +99,7 @@ check(await page.getByText('۰ از ۱ انجام شد').count() > 0, 'undo reop
 
 // Wait for the reminder notification to be posted by Android.
 let posted = false;
-for (let i = 0; i < 60 && !posted; i++) {
+for (let i = 0; i < 100 && !posted; i++) {
   posted = sh('adb shell dumpsys notification --noredact').includes('آزمایش یادآوری');
   if (!posted) await sleep(5000);
 }

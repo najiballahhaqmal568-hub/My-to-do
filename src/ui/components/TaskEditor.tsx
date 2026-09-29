@@ -7,6 +7,7 @@ import { notifications } from '../../platform/notifications';
 import { useApp, type EditorRequest } from '../context';
 import { Icon } from '../icons';
 import { DatePicker } from './DatePicker';
+import { TimeField } from './TimeField';
 
 type RepeatKind = 'none' | RepeatRule['kind'];
 interface SubDraft {
@@ -149,18 +150,12 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
         </div>
       </div>
 
-      <div className="row2">
-        <div className="field">
-          <span className="label">{t.date}</span>
-          <button type="button" className="input pickbtn" aria-expanded={pickDate} onClick={() => setPickDate(!pickDate)} data-testid="date-field">
-            <span>{due ? formatDay(lang, due) : t.noDate}</span>
-            <Icon name="calendar" small />
-          </button>
-        </div>
-        <div className="field">
-          <label htmlFor="task-time">{t.time}</label>
-          <input id="task-time" className="input" type="time" value={time} disabled={!due} onChange={(e) => setTime(e.target.value)} />
-        </div>
+      <div className="field">
+        <span className="label">{t.date}</span>
+        <button type="button" className="input pickbtn" aria-expanded={pickDate} onClick={() => setPickDate(!pickDate)} data-testid="date-field">
+          <span>{due ? formatDay(lang, due) : t.noDate}</span>
+          <Icon name="calendar" small />
+        </button>
       </div>
       <AnimatePresence initial={false}>
         {pickDate && (
@@ -176,6 +171,11 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="field">
+        <span className="label">{t.time}</span>
+        <TimeField id="task-time" value={time} allowEmpty disabled={!due} onChange={setTime} />
+      </div>
 
       <div className="field">
         <span className="label">{t.priority}</span>

@@ -11,8 +11,26 @@ export function digits(lang: Language, value: string | number): string {
   return lang === 'fa' ? s.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : s;
 }
 
+/** The part of the day in Dari, the way it is said in Afghanistan: «۶ صبح», «۱۲ ظهر», «۸ شب». */
+export function dayPeriod(lang: Language, hour24: number): string {
+  if (lang === 'en') return hour24 < 12 ? 'AM' : 'PM';
+  if (hour24 < 4) return 'شب';
+  if (hour24 < 12) return 'صبح';
+  if (hour24 === 12) return 'ظهر';
+  if (hour24 < 17) return 'بعدازظهر';
+  if (hour24 < 20) return 'شام';
+  return 'شب';
+}
+
+/** «۶ صبح» / "6 AM": an hour on the 12-hour clock. */
+export function hourLabel(lang: Language, hour24: number): string {
+  return `${digits(lang, hour24 % 12 || 12)} ${dayPeriod(lang, hour24)}`;
+}
+
+/** A time on the 12-hour clock: «۶:۳۰ صبح» / "6:30 AM". */
 export function formatTime(lang: Language, time: Time): string {
-  return digits(lang, time.replace(/^0(\d)/, '$1'));
+  const [h, m] = time.split(':').map(Number);
+  return `${digits(lang, `${h % 12 || 12}:${String(m).padStart(2, '0')}`)} ${dayPeriod(lang, h)}`;
 }
 
 export function weekdayName(lang: Language, iso: ISODate): string {
@@ -98,6 +116,7 @@ const fa = {
   notesPlaceholder: 'جزئیات بیشتر…',
   date: 'تاریخ',
   time: 'ساعت',
+  minute: 'دقیقه',
   noTime: 'بدون ساعت',
   category: 'کتگوری',
   priority: 'اولویت',
@@ -228,6 +247,7 @@ const en: Messages = {
   notesPlaceholder: 'More details…',
   date: 'Date',
   time: 'Time',
+  minute: 'Minute',
   noTime: 'No time',
   category: 'Category',
   priority: 'Priority',
