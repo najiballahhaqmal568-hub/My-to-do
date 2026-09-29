@@ -21,12 +21,19 @@ let device;
 async function connect() {
   if (!device) [device] = await android.devices({ omitDriverInstall: true });
   let page;
-  for (let i = 0; i < 20; i++) {
-    const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
-    page = await webview.page();
-    if (!page.isClosed()) break;
-    await sleep(1000);
+  for (let attempt = 0; attempt < 4 && !page; attempt++) {
+    // After the notification shade or the share sheet, make sure the app is in front again.
+    sh(`adb shell am start -n ${PKG}/.MainActivity`);
+    await sleep(1500);
+    try {
+      const webview = await device.webView({ pkg: PKG }, { timeout: 30000 });
+      const candidate = await webview.page();
+      if (!candidate.isClosed()) page = candidate;
+    } catch (e) {
+      log('reconnect attempt', attempt + 1, String(e).split('\n')[0]);
+    }
   }
+  if (!page) throw new Error('could not reach the app WebView');
   return { browser: { close: async () => undefined }, page };
 }
 

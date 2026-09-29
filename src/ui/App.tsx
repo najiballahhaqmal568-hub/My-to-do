@@ -173,10 +173,10 @@ export function App({ core }: { core: TaskCore }) {
 
   const fabDefaults = (): EditorRequest => {
     const today = core.today();
-    if (route.name === 'dashboard') return { defaults: { due: today } };
+    // New tasks default to today so they show up among today's tasks; the date can be changed or cleared.
     if (route.name === 'upcoming') return { defaults: { due: addDays(today, 1) } };
-    if (route.name === 'list') return { defaults: { categoryId: route.categoryId } };
-    return {};
+    if (route.name === 'list') return { defaults: { due: today, categoryId: route.categoryId } };
+    return { defaults: { due: today } };
   };
 
   let screen;

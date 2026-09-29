@@ -159,3 +159,22 @@ test('works with reduced motion', async ({ page }) => {
   await row(page, 'بی‌حرکت').getByRole('button', { name: /انجام شد/ }).click();
   await expect(page.getByText('۱ از ۱ انجام شد')).toBeAttached();
 });
+
+test('tasks added in a category show on the dashboard', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('cat-card-دوکان').click();
+  await addTask(page, 'سفارش جنس');
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(row(page, 'سفارش جنس')).toBeVisible();
+  await expect(page.getByTestId('cat-card-دوکان')).toContainText('۱ مانده');
+});
+
+test('tasks without a date appear in their own dashboard section', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('fab').click();
+  await page.locator('#task-title').fill('بی‌تاریخ');
+  await page.getByTestId('date-field').click();
+  await page.getByRole('dialog').getByRole('button', { name: 'بدون تاریخ', exact: true }).click();
+  await page.getByRole('button', { name: 'ذخیره' }).click();
+  await expect(page.getByTestId('undated')).toContainText('بی‌تاریخ');
+});

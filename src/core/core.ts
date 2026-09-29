@@ -56,6 +56,9 @@ export interface Dashboard {
   overdue: Task[];
   /** Today's tasks: open ones first, then the ones completed today. */
   tasks: Task[];
+  /** Open tasks with no due date; they are not part of today's progress. */
+  undated: Task[];
+  /** Per category: today's and overdue tasks plus open undated ones. */
   categories: CategoryProgress[];
   tomorrowItems: Occurrence[];
 }
@@ -437,9 +440,10 @@ export class TaskCore {
     const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today && !!t.due && t.due < today;
     const tasks = this.sort(this.data.tasks.filter((t) => t.due === today || doneToday(t)), today);
     const all = [...overdue, ...tasks];
+    const undated = this.sort(this.data.tasks.filter((t) => !t.due && !t.done), today);
     const ids: (string | null)[] = [...this.categories().map((c) => c.id), null];
     const categories = ids.map((categoryId) => {
-      const mine = all.filter((t) => t.categoryId === categoryId);
+      const mine = [...all, ...undated].filter((t) => t.categoryId === categoryId);
       return { categoryId, total: mine.length, left: mine.filter((t) => !t.done).length };
     });
     return {
@@ -448,6 +452,7 @@ export class TaskCore {
       progress: { done: all.filter((t) => t.done).length, total: all.length },
       overdue,
       tasks,
+      undated,
       categories,
       tomorrowItems: this.occurrences(tomorrow, tomorrow),
     };
