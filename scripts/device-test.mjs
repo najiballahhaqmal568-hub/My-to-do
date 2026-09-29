@@ -12,6 +12,9 @@ const check = (ok, what) => {
   console.log(`[device] ${ok ? 'PASS' : 'FAIL'}: ${what}`);
   if (!ok) failures++;
 };
+/** Clicks through the DOM, so a moving layout (keyboard opening, springs) cannot misroute the tap. */
+const tap = (locator) => locator.evaluate((el) => el.click());
+const blur = (p) => p.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
 const shot = (name) => sh(`adb exec-out screencap -p > ${OUT}/${name}.png`);
 
 let device;
@@ -39,14 +42,15 @@ const when = await page.evaluate(() => {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 });
-await page.getByTestId('fab').click();
+await tap(page.getByTestId('fab'));
 await page.locator('#task-title').fill('آزمایش یادآوری');
 await page.locator('#task-time').fill(when);
-await page.getByRole('dialog').getByRole('button', { name: 'سر وقت', exact: true }).click();
-await page.getByRole('dialog').getByRole('button', { name: '🏃 ورزش' }).click();
+await blur(page);
+await tap(page.getByRole('dialog').getByRole('button', { name: 'سر وقت', exact: true }));
+await tap(page.getByRole('dialog').getByRole('button', { name: '🏃 ورزش' }));
 await sleep(800);
 shot('2-editor');
-await page.getByRole('button', { name: 'ذخیره' }).click();
+await tap(page.getByRole('button', { name: 'ذخیره' }));
 await sleep(4000);
 shot('3-dashboard-with-task');
 
@@ -54,18 +58,18 @@ const alarms = sh('adb shell dumpsys alarm');
 check(alarms.includes(PKG), 'Android has alarms scheduled for the app');
 
 // Back button closes an open sheet instead of leaving the app.
-await page.getByTestId('fab').click();
+await tap(page.getByTestId('fab'));
 await page.locator('#task-title').waitFor();
 sh('adb shell input keyevent KEYCODE_BACK');
 await sleep(1500);
 check((await page.locator('#task-title').count()) === 0, 'back button closes the task sheet');
 
 // Completing a task (haptics must not break anything).
-await page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).getByRole('button', { name: /انجام شد/ }).click();
+await tap(page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).getByRole('button', { name: /انجام شد/ }));
 await sleep(1500);
 check(await page.getByText('۱ از ۱ انجام شد').count() > 0, 'completing a task updates progress');
 shot('4-completed');
-await page.getByRole('status').filter({ hasText: 'برگرداندن' }).getByRole('button', { name: 'برگرداندن' }).click().catch(() => undefined);
+await tap(page.getByRole('status').filter({ hasText: 'برگرداندن' }).getByRole('button', { name: 'برگرداندن' })).catch(() => undefined);
 await sleep(1500);
 check(await page.getByText('۰ از ۱ انجام شد').count() > 0, 'undo reopens the task');
 
@@ -83,10 +87,10 @@ sh('adb shell cmd statusbar collapse');
 await sleep(1000);
 
 // Export opens Android's share sheet.
-await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
+await tap(page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }));
 await sleep(1000);
 shot('6-settings');
-await page.getByRole('button', { name: 'خروجی گرفتن' }).click();
+await tap(page.getByRole('button', { name: 'خروجی گرفتن' }));
 await sleep(3500);
 shot('7-share-sheet');
 const top = sh('adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" || true');

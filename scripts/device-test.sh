@@ -13,6 +13,13 @@ adb shell am start -W -n $PKG/.MainActivity
 status=0
 node scripts/device-test.mjs || status=$?
 adb logcat -d > device-shots/logcat.txt
+# Small copies of key screenshots, printed into the log so they can be read without downloading artifacts.
+for name in 1-dashboard 2-editor 5-notification 8-dark; do
+  f=device-shots/$name.png
+  [ -f "$f" ] || continue
+  convert "$f" -resize 300x -quality 45 "/tmp/$name.jpg" 2>/dev/null || continue
+  base64 -w 4000 "/tmp/$name.jpg" | sed "s/^/[img $name] /"
+done
 if grep -q "FATAL EXCEPTION" device-shots/logcat.txt; then
   echo "[device] FAIL: the app crashed"
   grep -A 25 "FATAL EXCEPTION" device-shots/logcat.txt | head -60
