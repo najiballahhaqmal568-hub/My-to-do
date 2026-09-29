@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">کارهای من</string>
+    <string name="title_activity_main">کارهای من</string>
+    <string name="package_name">app.mytodo.personal</string>
+    <string name="custom_url_scheme">app.mytodo.personal</string>
+</resources>
