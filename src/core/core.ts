@@ -416,6 +416,7 @@ export class TaskCore {
 
   /** Overdue first, then due date, due time (untimed last), priority; completed tasks last. */
   sort(tasks: Task[], today = this.today()): Task[] {
+    const added = this.addedOrder();
     return [...tasks].sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
       const oa = this.isOverdue(a, today);
@@ -429,8 +430,14 @@ export class TaskCore {
       if (ta !== tb) return ta < tb ? -1 : 1;
       const pr = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
       if (pr) return pr;
-      return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
+      // Tasks that tie on everything else: the most recently added comes first, so a new task is on top.
+      return (added.get(b.id) ?? 0) - (added.get(a.id) ?? 0);
     });
+  }
+
+  /** Where each task sits in storage: later means added more recently. Editing a task does not move it. */
+  private addedOrder(): Map<string, number> {
+    return new Map(this.data.tasks.map((t, i) => [t.id, i]));
   }
 
   dashboard(): Dashboard {
@@ -472,12 +479,13 @@ export class TaskCore {
         if (d >= from) out.push({ task, date: d, projected: true });
       }
     }
+    const added = this.addedOrder();
     return out.sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
       const ta = a.task.time ?? '99:99';
       const tb = b.task.time ?? '99:99';
       if (ta !== tb) return ta < tb ? -1 : 1;
-      return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority] || (a.task.createdAt < b.task.createdAt ? -1 : 1);
+      return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority] || (added.get(b.task.id) ?? 0) - (added.get(a.task.id) ?? 0);
     });
   }
 

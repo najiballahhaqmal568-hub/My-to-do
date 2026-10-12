@@ -43,6 +43,8 @@ export function App({ core }: { core: TaskCore }) {
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const route = stack[stack.length - 1];
   const toastTimer = useRef<number | undefined>(undefined);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -92,6 +94,12 @@ export function App({ core }: { core: TaskCore }) {
     window.clearTimeout(toastTimer.current);
     setToastState({ id: Date.now(), message, undo: withUndo });
     toastTimer.current = window.setTimeout(() => setToastState(null), 4500);
+  }, []);
+
+  const highlight = useCallback((id: string) => {
+    window.clearTimeout(highlightTimer.current);
+    setHighlightId(id);
+    highlightTimer.current = window.setTimeout(() => setHighlightId(null), 3500);
   }, []);
 
   const ask = useCallback(
@@ -167,8 +175,8 @@ export function App({ core }: { core: TaskCore }) {
 
   const tick = version * 1_000_000 + minute;
   const ctx = useMemo<AppContextValue>(
-    () => ({ core, lang, t, dir, tick, route, navigate, back, openEditor: setEditor, toast, ask, complete, reduceMotion }),
-    [core, lang, t, dir, tick, route, navigate, back, toast, ask, complete, reduceMotion],
+    () => ({ core, lang, t, dir, tick, route, navigate, back, openEditor: setEditor, toast, ask, complete, reduceMotion, highlightId, highlight }),
+    [core, lang, t, dir, tick, route, navigate, back, toast, ask, complete, reduceMotion, highlightId, highlight],
   );
 
   const fabDefaults = (): EditorRequest => {

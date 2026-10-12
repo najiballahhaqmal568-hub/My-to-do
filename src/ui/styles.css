@@ -371,3 +371,13 @@ textarea.input { resize: vertical; min-height: 70px; }
 .timefield select:first-child { flex: 2; }
 .timefield select:last-child { flex: 1; }
 .card-row .timefield { width: 210px; flex: none; }
+
+/* A task that was just added glows briefly in its category colour. */
+.swipe.fresh .row { animation: fresh 3s ease-out 1; }
+@keyframes fresh {
+  0%, 45% { box-shadow: 0 0 0 3px var(--cat, var(--accent)), 0 8px 24px color-mix(in srgb, var(--cat, var(--accent)) 35%, transparent); }
+  100% { box-shadow: 0 1px 2px var(--shadow); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .swipe.fresh .row { animation: none; box-shadow: 0 0 0 3px var(--cat, var(--accent)); }
+}

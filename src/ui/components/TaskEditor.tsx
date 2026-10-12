@@ -21,7 +21,7 @@ const REPEATS: RepeatKind[] = ['none', 'daily', 'weekly', 'weekdays', 'everyN', 
 const REMINDERS: (ReminderOffset | null)[] = [null, 'atTime', '15m', '1h', '1d'];
 
 export function TaskEditor({ request, onClose }: { request: EditorRequest; onClose(): void }) {
-  const { core, lang, t, toast } = useApp();
+  const { core, lang, t, toast, highlight } = useApp();
   const existing = request.taskId ? core.task(request.taskId) : undefined;
   const init: TaskInput = existing ?? { title: '', ...request.defaults };
 
@@ -76,7 +76,7 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
     };
     try {
       if (existing) core.updateTask(existing.id, input);
-      else core.addTask(input);
+      else highlight(core.addTask(input).id);
     } catch (e) {
       const code = e instanceof CoreError ? e.code : '';
       setError(

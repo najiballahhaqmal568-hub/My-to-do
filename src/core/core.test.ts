@@ -110,6 +110,38 @@ describe('tasks without a date', () => {
   });
 });
 
+describe('newest first', () => {
+  it('lists the most recently added task first among tasks that tie', () => {
+    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28' });
+    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28' });
+    core.addTask({ title: 'سه', categoryId: 'shop', due: '2026-09-28' });
+    expect(titles(core.list('shop').open)).toEqual(['سه', 'دو', 'یک']);
+    expect(titles(core.dashboard().tasks)).toEqual(['سه', 'دو', 'یک']);
+  });
+
+  it('still orders by time and priority before recency', () => {
+    core.addTask({ title: 'نیم‌روز', due: '2026-09-28', time: '12:00' });
+    core.addTask({ title: 'مهم', due: '2026-09-28', priority: 'high' });
+    core.addTask({ title: 'ساده', due: '2026-09-28' });
+    core.addTask({ title: 'صبح', due: '2026-09-28', time: '07:00' });
+    expect(titles(core.dashboard().tasks)).toEqual(['صبح', 'نیم‌روز', 'مهم', 'ساده']);
+  });
+
+  it('keeps a task where it is when it is edited', () => {
+    const first = core.addTask({ title: 'قدیمی', due: '2026-09-28' });
+    core.addTask({ title: 'تازه', due: '2026-09-28' });
+    core.updateTask(first.id, { notes: 'تغییر' });
+    expect(titles(core.dashboard().tasks)).toEqual(['تازه', 'قدیمی']);
+  });
+
+  it('puts the newest first in Upcoming and in search results too', () => {
+    core.addTask({ title: 'الف', due: '2026-09-29' });
+    core.addTask({ title: 'ب', due: '2026-09-29' });
+    expect(titles(core.upcoming()[0].items.map((o) => o.task))).toEqual(['ب', 'الف']);
+    expect(titles(core.search(''))).toEqual(['ب', 'الف']);
+  });
+});
+
 describe('categories and Inbox', () => {
   it('reports remaining work per category on the dashboard', () => {
     const a = core.addTask({ title: 'run', categoryId: 'sport', due: '2026-09-28' });
@@ -178,7 +210,7 @@ describe('undo', () => {
     const back = core.task(t.id)!;
     expect(back.categoryId).toBe('shop');
     expect(back.subtasks[0]).toMatchObject({ title: 's', done: true });
-    expect(titles(core.search(''))).toEqual(['first', 'middle', 'last']);
+    expect(titles(core.search(''))).toEqual(['last', 'middle', 'first']);
   });
 
   it('undoes a completion', () => {

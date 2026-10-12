@@ -67,11 +67,29 @@ test('raising the priority moves a task up', async ({ page }) => {
   await open(page);
   await addTask(page, 'اول');
   await addTask(page, 'دوم');
-  await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'اول');
-  await row(page, 'دوم').getByText('دوم').click();
+  // The newest task is listed first among tasks that tie.
+  await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'دوم');
+  await row(page, 'اول').getByText('اول').click();
   await page.getByRole('dialog').getByRole('button', { name: 'بالا', exact: true }).click();
   await page.getByRole('button', { name: 'ذخیره' }).click();
-  await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'دوم');
+  await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'اول');
+});
+
+test('a task just added is listed first, highlighted and scrolled into view', async ({ page }) => {
+  test.setTimeout(90_000);
+  await open(page);
+  // Timed tasks sort before untimed ones, so the new untimed task would sit below a long list.
+  for (let h = 5; h <= 14; h++) await addTask(page, `کار ${h}`, { time: `${String(h).padStart(2, '0')}:00` });
+  await addTask(page, 'تازه‌ترین');
+  const fresh = row(page, 'تازه‌ترین');
+  await expect(fresh).toHaveClass(/fresh/);
+  await expect(fresh).toBeInViewport();
+  // Among untimed tasks it comes before older ones.
+  await addTask(page, 'قدیمی‌تر');
+  await addTask(page, 'از همه تازه‌تر');
+  const untimed = await page.getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')).filter((t) => !t?.startsWith('کار ')));
+  expect(untimed).toEqual(['از همه تازه‌تر', 'قدیمی‌تر', 'تازه‌ترین']);
+  await expect(row(page, 'از همه تازه‌تر')).toBeInViewport();
 });
 
 test('undo brings back a deleted task', async ({ page }) => {

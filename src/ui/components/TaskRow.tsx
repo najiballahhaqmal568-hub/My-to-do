@@ -1,5 +1,5 @@
 import { motion, useMotionValue, useTransform } from 'motion/react';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Task } from '../../core/types';
 import { formatDayShort, formatTime, repeatLabel } from '../../i18n';
 import { useApp } from '../context';
@@ -16,10 +16,19 @@ interface Props {
 }
 
 export function TaskRow({ task, showCategory = true, showDate = false, projected = false }: Props) {
-  const { core, lang, t, complete, openEditor } = useApp();
+  const { core, lang, t, complete, openEditor, highlightId, reduceMotion } = useApp();
   const x = useMotionValue(0);
   const bgOpacity = useTransform(x, [-110, -12, 0, 12, 110], [1, 0.15, 0, 0.15, 1]);
   const checkRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fresh = !projected && highlightId === task.id;
+
+  // A task that was just added scrolls into view, so it never has to be hunted down at the end of the list.
+  useEffect(() => {
+    if (!fresh) return;
+    const id = window.setTimeout(() => rootRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }), 350);
+    return () => window.clearTimeout(id);
+  }, [fresh, reduceMotion]);
   const cat = core.category(task.categoryId);
   const late = !projected && core.isOverdue(task);
   const swipeLabel = task.done ? t.undo : t.done;
@@ -27,8 +36,9 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
 
   return (
     <motion.div
+      ref={rootRef}
       layout="position"
-      className={`swipe ${cat ? `c-${cat.color}` : 'c-inbox'}`}
+      className={`swipe ${cat ? `c-${cat.color}` : 'c-inbox'}${fresh ? ' fresh' : ''}`}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.18 } }}
