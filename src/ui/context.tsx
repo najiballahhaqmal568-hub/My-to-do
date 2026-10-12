@@ -39,6 +39,9 @@ export interface AppContextValue {
   /** Completes or reopens a task with feedback (haptics, sparks, undo toast, celebration). */
   complete(taskId: string, done: boolean, origin?: DOMRect): void;
   reduceMotion: boolean;
+  /** The task that was just added: its row scrolls into view and is highlighted for a few seconds. */
+  highlightId: string | null;
+  highlight(taskId: string): void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);
