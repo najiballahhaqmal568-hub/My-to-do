@@ -209,7 +209,7 @@ export class TaskCore {
       reminder: patch.reminder !== undefined ? patch.reminder : old.reminder,
       subtasks: patch.subtasks ?? old.subtasks,
     };
-    const task = this.build(old, merged);
+    const task = this.build({ ...old, snoozedUntil: null }, merged);
     this.setTasks(this.replace(task));
     return task;
   }
@@ -252,7 +252,7 @@ export class TaskCore {
     const task = this.find(id);
     if (task.done === done) return;
     if (done) {
-      const completed: Task = { ...task, done: true, completedAt: this.now().toISOString(), spawnedId: null };
+      const completed: Task = { ...task, done: true, completedAt: this.now().toISOString(), spawnedId: null, snoozedUntil: null };
       let tasks = this.data.tasks;
       if (task.repeat && task.due) {
         const next: Task = {
@@ -263,6 +263,7 @@ export class TaskCore {
           completedAt: null,
           createdAt: this.now().toISOString(),
           spawnedId: null,
+          snoozedUntil: null,
           subtasks: task.subtasks.map((s) => ({ ...s, id: newId(), done: false })),
         };
         completed.spawnedId = next.id;
@@ -316,11 +317,17 @@ export class TaskCore {
     this.setTasks(this.replace({ ...t, subtasks: t.subtasks.map((s) => (s.id === subtaskId ? { ...s, done: !s.done } : s)) }));
   }
 
+  /** «بعداً» on a reminder: ring again after `minutes`. */
+  snoozeReminder(id: string, minutes = 15): void {
+    const t = this.find(id);
+    this.setTasks(this.replace({ ...t, snoozedUntil: new Date(this.now().getTime() + minutes * 60000).toISOString() }));
+  }
+
   /** Moves a repeating task to its next occurrence without completing it. */
   skipOccurrence(id: string): Task {
     const t = this.find(id);
     if (!t.repeat || !t.due) throw new CoreError('not-repeating');
-    const next: Task = { ...t, due: nextDate(t.repeat, t.due), subtasks: t.subtasks.map((s) => ({ ...s, done: false })) };
+    const next: Task = { ...t, due: nextDate(t.repeat, t.due), snoozedUntil: null, subtasks: t.subtasks.map((s) => ({ ...s, done: false })) };
     this.setTasks(this.replace(next));
     return next;
   }
@@ -555,6 +562,22 @@ export class TaskCore {
         title: task.title,
         body: t.dueAt(formatDay(lang, o.date), formatTime(lang, task.time)),
         link: `task:${task.id}`,
+        actions: true,
+      });
+    }
+
+    // A reminder the user snoozed rings again at the chosen moment.
+    for (const task of this.data.tasks) {
+      if (task.done || !task.snoozedUntil) continue;
+      const at = new Date(task.snoozedUntil);
+      if (at <= now) continue;
+      plan.push({
+        id: notificationId(`s:${task.id}`),
+        at,
+        title: task.title,
+        body: task.due && task.time ? t.dueAt(formatDay(lang, task.due), formatTime(lang, task.time)) : '',
+        link: `task:${task.id}`,
+        actions: true,
       });
     }
 

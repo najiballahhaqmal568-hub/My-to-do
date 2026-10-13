@@ -117,6 +117,28 @@ for (let i = 0; i < 100 && !posted; i++) {
   if (!posted) await sleep(5000);
 }
 check(posted, 'the task reminder notification arrives');
+
+// The reminder carries «done» and «later» buttons, and pressing them reaches the app.
+const dump = sh('adb shell dumpsys notification --noredact');
+const at = dump.indexOf('آزمایش یادآوری');
+const record = dump.slice(Math.max(0, at - 3000), at + 3000);
+check(record.includes('انجام شد') && record.includes('۱۵ دقیقه بعد'), 'the reminder shows «انجام شد» and «۱۵ دقیقه بعد» buttons');
+const notifId = [...dump.slice(0, at).matchAll(/pkg=app\.mytodo\.personal[^\n]* id=(\d+) tag=/g)].pop()?.[1];
+const taskId = await page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).first().getAttribute('data-task-id');
+if (notifId && taskId) {
+  const press = (action) => {
+    const json = JSON.stringify({ id: Number(notifId), extra: { link: `task:${taskId}` } }).replace(/"/g, '\\"');
+    sh(`adb shell "am start -n ${PKG}/.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --ei LocalNotificationId ${notifId} --es LocalNotificationUserAction ${action} --es LocalNotficationObject '${json}'"`);
+  };
+  press('later');
+  await sleep(2500);
+  check((await page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).count()) === 1, 'pressing «بعداً» keeps the task');
+  press('done');
+  await sleep(2500);
+  const doneNow = await page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).first().evaluate((el) => el.querySelector('.row')?.classList.contains('done'));
+  check(doneNow === true, 'pressing «انجام شد» on the notification completes the task');
+  ({ browser, page } = await connect());
+} else check(false, `could not read the notification id (${notifId}) or task id (${taskId})`);
 sh('adb shell cmd statusbar expand-notifications');
 await sleep(2000);
 shot('5-notification');

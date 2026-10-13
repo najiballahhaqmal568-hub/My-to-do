@@ -74,6 +74,11 @@ export function onBackButton(handler: () => boolean): void {
   });
 }
 
+/** Sends the app back to where the user was, after a notification button was handled. */
+export function minimizeApp(): void {
+  if (isNative) App.minimizeApp().catch(() => undefined);
+}
+
 export function onResume(handler: () => void): void {
   if (isNative) App.addListener('resume', handler);
   document.addEventListener('visibilitychange', () => {

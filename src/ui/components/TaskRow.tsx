@@ -45,6 +45,7 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
       transition={SPRING}
       data-testid="task-row"
       data-title={task.title}
+      data-task-id={task.id}
     >
       {!projected && (
         <motion.div className="swipe-bg" style={{ opacity: bgOpacity }} aria-hidden="true">

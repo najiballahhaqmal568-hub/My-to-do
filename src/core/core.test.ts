@@ -489,3 +489,52 @@ describe('automatic backup settings', () => {
     expect(core.settings.lastBackup).toBe('2026-09-28');
   });
 });
+
+describe('reminder buttons', () => {
+  const NINE = new Date('2026-09-28T09:00:00+04:30').getTime();
+  const reminder = (id: string) => core.notificationPlan().filter((p) => p.link === `task:${id}`);
+
+  beforeEach(() => core.updateSettings({ bedtimeEnabled: false, backupReminder: false }));
+
+  it('puts the buttons on task reminders but not on the bedtime summary', () => {
+    core.updateSettings({ bedtimeEnabled: true });
+    const t = core.addTask({ title: 'جلسه', due: '2026-09-28', time: '18:00', reminder: '1h' });
+    core.addTask({ title: 'فردا', due: '2026-09-29' });
+    const plan = core.notificationPlan();
+    expect(plan.find((p) => p.link === `task:${t.id}`)?.actions).toBe(true);
+    expect(plan.find((p) => p.link === 'tomorrow')?.actions).toBeUndefined();
+  });
+
+  it('rings again after a snooze, 15 minutes later by default', () => {
+    const t = core.addTask({ title: 'جلسه', due: '2026-09-28', time: '09:00', reminder: 'atTime' });
+    clock.set(new Date(NINE + 60_000));
+    core.snoozeReminder(t.id);
+    const [again] = reminder(t.id);
+    expect(again.at.toISOString()).toBe(new Date(NINE + 60_000 + 15 * 60_000).toISOString());
+    expect(again).toMatchObject({ title: 'جلسه', actions: true });
+    expect(again.body).toBe('دوشنبه، ۶ میزان، ساعت ۹:۰۰ صبح');
+  });
+
+  it('forgets the snooze when the task is done, edited or skipped', () => {
+    const a = core.addTask({ title: 'الف', due: '2026-09-28', time: '09:00', reminder: 'atTime' });
+    const b = core.addTask({ title: 'ب', due: '2026-09-28', time: '09:00', reminder: 'atTime' });
+    const c = core.addTask({ title: 'ج', due: '2026-09-28', time: '09:00', reminder: 'atTime', repeat: { kind: 'daily' } });
+    for (const t of [a, b, c]) core.snoozeReminder(t.id, 30);
+    expect(reminder(a.id)).toHaveLength(1);
+    core.setDone(a.id, true);
+    expect(reminder(a.id)).toEqual([]);
+    core.updateTask(b.id, { title: 'ب تازه' });
+    expect(core.task(b.id)!.snoozedUntil).toBeNull();
+    core.skipOccurrence(c.id);
+    expect(core.task(c.id)!.snoozedUntil).toBeNull();
+  });
+
+  it('does not carry a snooze into the next occurrence of a repeating task', () => {
+    const t = core.addTask({ title: 'دارو', due: '2026-09-28', time: '09:00', reminder: 'atTime', repeat: { kind: 'daily' } });
+    core.snoozeReminder(t.id);
+    core.setDone(t.id, true);
+    const next = core.search('', { status: 'open' })[0];
+    expect(next.due).toBe('2026-09-29');
+    expect(next.snoozedUntil).toBeNull();
+  });
+});
