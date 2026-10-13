@@ -45,3 +45,54 @@ jobs:
           name: device-shots
           path: device-shots
           retention-days: 14
+
+  rotation:
+    # Moving to a private signing key must not strand phones that already have the app: an update signed with
+    # the new key and a rotation lineage has to install over a build signed with the public key.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build two release APKs (version 1 and 2) signed with the public key
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          mkdir -p ../out
+          ./gradlew assembleRelease --no-daemon -PappVersionCode=1 -PappVersionName=1.0.0
+          cp app/build/outputs/apk/release/app-release.apk ../out/old.apk
+          ./gradlew assembleRelease --no-daemon -PappVersionCode=2 -PappVersionName=1.0.1
+          cp app/build/outputs/apk/release/app-release.apk ../out/v2-public.apk
+      - name: Sign version 2 with a throwaway new key, with and without the lineage
+        env:
+          NEW_KEY_PASS: throwaway-passphrase
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/new.p12" -storetype PKCS12 -alias mytodo-private -keyalg RSA -keysize 2048 \
+            -validity 3650 -dname "CN=Test" -storepass "$NEW_KEY_PASS" -keypass "$NEW_KEY_PASS"
+          NEW_KEYSTORE="$RUNNER_TEMP/new.p12" scripts/sign-release.sh out/v2-public.apk out/rotated.apk
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" sign --ks "$RUNNER_TEMP/new.p12" --ks-key-alias mytodo-private --ks-pass env:NEW_KEY_PASS --key-pass env:NEW_KEY_PASS --out out/unrotated.apk out/v2-public.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and update on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/rotation-test.sh

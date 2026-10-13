@@ -38,3 +38,8 @@ npm run android:sync   # copy the web build into the Android project
 GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds a signed APK on every push. Pushing to `main`, or running the workflow by hand, publishes it as a GitHub Release.
 
 See `CONTEXT.md` for the domain vocabulary and `docs/adr/` for decisions.
+
+## Signing
+
+Releases are signed with the public key in `android/app/public-release.keystore` (ADR 0001). To make updates impossible to forge, the repository also holds an encrypted private key; adding its passphrase as the GitHub secret `SIGNING_PASSPHRASE` switches releases to it without stranding installed apps (ADR 0003). Without the secret nothing changes.
+

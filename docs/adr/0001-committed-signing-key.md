@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Partly superseded by ADR 0003, which adds an optional private key without stranding installed apps.
 
 ## Context
 
