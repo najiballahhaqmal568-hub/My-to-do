@@ -63,6 +63,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SIGNING_PASSPHRASE: ${{ secrets.SIGNING_PASSPHRASE }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
@@ -71,7 +72,9 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon -PappVersionCode=${{ github.run_number }} -PappVersionName=$APP_VERSION
           mkdir -p ../out
-          cp app/build/outputs/apk/release/app-release.apk ../out/my-to-do-$APP_VERSION.apk
+          cd ..
+          # With the SIGNING_PASSPHRASE secret set, the APK is signed with the private key (ADR 0003).
+          SIGNING_PASSPHRASE="$SIGNING_PASSPHRASE" scripts/sign-release.sh android/app/build/outputs/apk/release/app-release.apk out/my-to-do-$APP_VERSION.apk
       - uses: actions/upload-artifact@v4
         with:
           name: my-to-do-apk
