@@ -285,7 +285,8 @@
         android:textSize="12sp"
         android:visibility="gone" />
 
-    <View
+    <!-- A widget may only use certain classes (not plain View), so an empty FrameLayout is the spacer. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
