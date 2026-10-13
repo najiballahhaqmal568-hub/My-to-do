@@ -58,6 +58,12 @@ export interface Settings {
   bedtimeEnabled: boolean;
   bedtimeTime: Time;
   exactAlarmAsked: boolean;
+  /** Save a backup file into the phone's Download/My-To-Do folder once a day. */
+  autoBackup: boolean;
+  /** The day the last automatic backup was saved. */
+  lastBackup: string | null;
+  /** A reminder every Friday to move a backup somewhere safe. */
+  backupReminder: boolean;
 }
 
 export interface Data {

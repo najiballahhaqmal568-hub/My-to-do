@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { CoreError } from '../../core/core';
-import { digits } from '../../i18n';
+import { digits, formatDay } from '../../i18n';
+import { backupName, saveBackup } from '../../platform/backup';
 import { notifications } from '../../platform/notifications';
-import { APP_VERSION, isNative, keepPrivateBackup, shareFile } from '../../platform/device';
+import { APP_VERSION, downloadUrl, isNative, keepPrivateBackup, shareFile } from '../../platform/device';
 import { TimeField } from '../components/TimeField';
 import { refreshUpdate, useUpdate } from '../components/UpdateBanner';
 import { useApp } from '../context';
@@ -29,6 +30,17 @@ export function Settings() {
       await notifications.ensurePermission(!s.exactAlarmAsked);
       core.updateSettings({ exactAlarmAsked: true });
       setExact(await notifications.exactAllowed());
+    }
+  }
+
+  async function backupNow() {
+    const today = core.today();
+    try {
+      const r = await saveBackup(backupName(today), core.exportBackup());
+      if (r.saved) core.updateSettings({ lastBackup: today });
+      toast(r.saved ? t.backupSaved : r.reason === 'unsupported' ? t.backupUnsupported : t.backupFailed);
+    } catch {
+      toast(t.backupFailed);
     }
   }
 
@@ -116,6 +128,32 @@ export function Settings() {
         )}
       </div>
 
+      <div className="card" data-testid="auto-backup">
+        <div className="card-row">
+          <div className="grow">
+            {t.autoBackup}
+            <small>{t.autoBackupHint}</small>
+          </div>
+          <button className="switch" role="switch" aria-checked={s.autoBackup} aria-label={t.autoBackup} onClick={() => core.updateSettings({ autoBackup: !s.autoBackup })} />
+        </div>
+        <div className="card-row">
+          <div className="grow">
+            {t.lastBackup}
+            <small data-testid="last-backup">{s.lastBackup ? formatDay(lang, s.lastBackup) : t.noBackupYet}</small>
+          </div>
+          <button className="text-btn" onClick={backupNow}>
+            {t.backupNow}
+          </button>
+        </div>
+        <div className="card-row">
+          <div className="grow">
+            {t.backupWeekly}
+            <small>{t.backupWeeklyHint}</small>
+          </div>
+          <button className="switch" role="switch" aria-checked={s.backupReminder} aria-label={t.backupWeekly} onClick={() => core.updateSettings({ backupReminder: !s.backupReminder })} />
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-row">
           <div className="grow">{t.backup}</div>
@@ -159,7 +197,7 @@ export function Settings() {
             {latest ? (
               <>
                 <div className="grow">{t.updateAvailable}</div>
-                <a className="text-btn" href={latest.url} target="_blank" rel="noreferrer">
+                <a className="text-btn" href={downloadUrl(latest)} target="_blank" rel="noreferrer">
                   {t.download}
                 </a>
               </>

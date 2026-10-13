@@ -71,12 +71,25 @@ await tap(page.getByRole('dialog').getByRole('button', { name: 'سر وقت', ex
 await tap(page.getByRole('dialog').getByRole('button', { name: '🏃 ورزش' }));
 await sleep(800);
 shot('2-editor');
-await tap(page.getByRole('button', { name: 'ذخیره' }));
+await tap(page.getByRole('button', { name: 'ذخیره', exact: true }));
 await sleep(4000);
 shot('3-dashboard-with-task');
 
 const alarms = sh('adb shell dumpsys alarm');
 check(alarms.includes(PKG), 'Android has alarms scheduled for the app');
+
+// The automatic daily backup is written into the public Download/My-To-Do folder.
+let files = '';
+for (let i = 0; i < 10 && !/my-to-do-\d{4}-\d{2}-\d{2}\.json/.test(files); i++) {
+  files = sh('adb shell ls /sdcard/Download/My-To-Do/ 2>&1 || true');
+  if (!/my-to-do-/.test(files)) await sleep(2000);
+}
+check(/my-to-do-\d{4}-\d{2}-\d{2}\.json/.test(files), `automatic backup file saved in Download/My-To-Do (${files.trim()})`);
+const backupText = sh('adb shell "cat /sdcard/Download/My-To-Do/my-to-do-*.json | head -c 200"');
+check(backupText.includes('"app": "my-to-do"'), 'the backup file holds the app data');
+
+const apk = await page.getByRole('link', { name: 'دانلود' }).first().getAttribute('href').catch(() => null);
+check(!!apk && apk.endsWith('.apk'), `the update message links straight to the APK (${apk})`);
 
 // Back button closes an open sheet instead of leaving the app.
 await tap(page.getByTestId('fab'));

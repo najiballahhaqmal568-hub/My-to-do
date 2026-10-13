@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { checkForUpdate, type ReleaseInfo } from '../../platform/device';
+import { checkForUpdate, downloadUrl, type ReleaseInfo } from '../../platform/device';
 import { useApp } from '../context';
 
 let latest: ReleaseInfo | null = null;
@@ -32,7 +32,7 @@ export function UpdateBanner() {
   return (
     <div className="banner" role="status">
       <span>{t.updateAvailable}</span>
-      <a href={latest.url} target="_blank" rel="noreferrer">
+      <a href={downloadUrl(latest)} target="_blank" rel="noreferrer">
         {t.download}
       </a>
     </div>

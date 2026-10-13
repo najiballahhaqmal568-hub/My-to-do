@@ -381,3 +381,5 @@ textarea.input { resize: vertical; min-height: 70px; }
 @media (prefers-reduced-motion: reduce) {
   .swipe.fresh .row { animation: none; box-shadow: 0 0 0 3px var(--cat, var(--accent)); }
 }
+
+.added-note { margin: -4px 0 12px; padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; font-size: 13.5px; }

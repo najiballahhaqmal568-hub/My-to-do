@@ -1,5 +1,5 @@
 import { MESSAGES, formatDay, formatTime, normalizeText } from '../i18n';
-import { addDays, atLocal, localISO, type ISODate } from './dates';
+import { addDays, atLocal, localISO, weekday, type ISODate } from './dates';
 import { nextDate, normalizeRule } from './recurrence';
 import type {
   Category,
@@ -74,7 +74,15 @@ export interface SearchFilters {
   overdueOnly?: boolean;
 }
 
-const DEFAULT_SETTINGS: Settings = { language: 'fa', bedtimeEnabled: true, bedtimeTime: '22:00', exactAlarmAsked: false };
+const DEFAULT_SETTINGS: Settings = {
+  language: 'fa',
+  bedtimeEnabled: true,
+  bedtimeTime: '22:00',
+  exactAlarmAsked: false,
+  autoBackup: true,
+  lastBackup: null,
+  backupReminder: true,
+};
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, none: 3 };
 const REMINDER_MINUTES = { atTime: 0, '15m': 15, '1h': 60, '1d': 1440 } as const;
 
@@ -568,6 +576,17 @@ export class TaskCore {
           body: left ? `${names}\n${t.bedtimeNotifLeft(left)}` : names,
           link: 'tomorrow',
         });
+      }
+    }
+    if (this.data.settings.backupReminder) {
+      // The next four Fridays at 10:00: a nudge to copy the automatic backup somewhere safe.
+      let found = 0;
+      for (let k = 0; k < 35 && found < 4; k++) {
+        const day = addDays(today, k);
+        const at = atLocal(day, '10:00');
+        if (weekday(day) !== 5 || at <= now) continue;
+        found++;
+        plan.push({ id: notificationId(`w:${day}`), at, title: t.backupReminderTitle, body: t.backupReminderBody, link: 'backup' });
       }
     }
     return plan.sort((a, b) => a.at.getTime() - b.at.getTime());
