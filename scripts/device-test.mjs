@@ -168,6 +168,62 @@ log('top activity:', top.trim());
 sh('adb shell input keyevent KEYCODE_BACK');
 await sleep(1500);
 
+// Arranging a list by hand with a real finger: Android's own input pipeline, not a mouse in a browser.
+({ browser, page } = await connect());
+const webViewTop = () => {
+  try {
+    sh('adb shell uiautomator dump /sdcard/ui.xml');
+    const m = sh('adb shell cat /sdcard/ui.xml').match(/class="android\.webkit\.WebView"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+    return m ? { x: Number(m[1]), y: Number(m[2]) } : { x: 0, y: 0 };
+  } catch {
+    return { x: 0, y: 0 };
+  }
+};
+const screenPoint = async (locator) => {
+  const origin = webViewTop();
+  const p = await locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: (r.left + r.width / 2) * devicePixelRatio, y: (r.top + r.height / 2) * devicePixelRatio };
+  });
+  return { x: Math.round(origin.x + p.x), y: Math.round(origin.y + p.y) };
+};
+await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await sleep(800);
+await tap(page.getByTestId('cat-card-دوکان'));
+await page.getByTestId('list-screen').waitFor();
+for (const title of ['اول', 'دوم', 'سوم']) {
+  await tap(page.getByTestId('fab'));
+  await page.locator('#task-title').fill(title);
+  await blur(page);
+  await tap(page.getByRole('button', { name: 'ذخیره', exact: true }));
+  await sleep(1200);
+}
+const order = () => page.getByTestId('list-screen').getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
+check(JSON.stringify(await order()) === JSON.stringify(['سوم', 'دوم', 'اول']), `a new task is listed first (${JSON.stringify(await order())})`);
+// A finger tap at a computed position first, to prove the coordinates are right.
+const modeButton = page.getByTestId('order-mode');
+const modePoint = await screenPoint(modeButton);
+sh(`adb shell input tap ${modePoint.x} ${modePoint.y}`);
+await sleep(1500);
+check((await modeButton.getAttribute('aria-pressed')) === 'true', `a finger tap lands where expected (${modePoint.x},${modePoint.y})`);
+const handle = (title) => page.getByRole('button', { name: `جابه‌جایی: ${title}` });
+const from = await screenPoint(handle('اول'));
+const to = await screenPoint(handle('سوم'));
+sh(`adb shell input swipe ${from.x} ${from.y} ${to.x} ${to.y - 120} 900`);
+await sleep(2000);
+shot('7b-manual-order');
+const arranged = JSON.stringify(await order());
+check(arranged === JSON.stringify(['اول', 'سوم', 'دوم']), `dragging the handle with a finger moves a task to the top (${arranged})`);
+// And the arrangement is stored.
+await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await sleep(800);
+await tap(page.getByTestId('cat-card-دوکان'));
+await page.getByTestId('list-screen').waitFor();
+await sleep(800);
+check(JSON.stringify(await order()) === JSON.stringify(['اول', 'سوم', 'دوم']), 'the arrangement is kept after leaving the list');
+await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await sleep(800);
+
 // Cancelling the share sheet is reported by Capacitor as an error; that is expected here.
 const realErrors = errors.filter((e) => !/Share canceled/i.test(e));
 check(realErrors.length === 0, `no JavaScript errors (${realErrors.slice(0, 3).join(' | ')})`);
@@ -195,7 +251,7 @@ await page.getByTestId('dashboard').waitFor({ timeout: 30000 });
 await sleep(2500);
 check((await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(14, 18, 16)', 'dark mode applies when the app starts in dark mode');
 shot('9-dark-restart');
-check((await page.getByTestId('task-row').count()) === 1, 'the task survived an app restart');
+check((await page.getByTestId('task-row').filter({ hasText: 'آزمایش یادآوری' }).count()) === 1, 'the task survived an app restart');
 await browser.close().catch(() => undefined);
 sh('adb shell cmd uimode night no');
 
