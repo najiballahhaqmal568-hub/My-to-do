@@ -584,3 +584,164 @@ describe('home screen widget snapshot', () => {
     expect(widgetSnapshot(core)).toMatchObject({ summary: 'امروز کاری ندارید', items: [], progress: 0 });
   });
 });
+
+describe('manual order', () => {
+  const order = (id: string | null) => titles(core.list(id).open);
+
+  it('keeps the order you see when switching to manual, then follows your arrangement', () => {
+    core.addTask({ title: 'ب', categoryId: 'shop', due: '2026-09-28', time: '12:00' });
+    core.addTask({ title: 'الف', categoryId: 'shop', due: '2026-09-28', time: '08:00' });
+    core.addTask({ title: 'ج', categoryId: 'shop', due: '2026-09-28' });
+    expect(order('shop')).toEqual(['الف', 'ب', 'ج']);
+    core.setManual('shop', true);
+    expect(core.isManual('shop')).toBe(true);
+    expect(order('shop')).toEqual(['الف', 'ب', 'ج']);
+    const [a, b, c] = core.list('shop').open.map((t) => t.id);
+    core.reorder('shop', [c, a, b]);
+    expect(order('shop')).toEqual(['ج', 'الف', 'ب']);
+    core.setManual('shop', false);
+    expect(order('shop')).toEqual(['الف', 'ب', 'ج']);
+  });
+
+  it('puts a new task on top of a manual list, and a task moved into it too', () => {
+    core.addTask({ title: 'قدیمی', categoryId: 'shop' });
+    core.setManual('shop', true);
+    core.addTask({ title: 'تازه', categoryId: 'shop' });
+    expect(order('shop')).toEqual(['تازه', 'قدیمی']);
+    const other = core.addTask({ title: 'مهمان', categoryId: 'sport' });
+    core.updateTask(other.id, { categoryId: 'shop' });
+    expect(order('shop')).toEqual(['مهمان', 'تازه', 'قدیمی']);
+  });
+
+  it('only changes the lists you arranged, and leaves the dashboard automatic', () => {
+    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28', time: '12:00' });
+    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28', time: '08:00' });
+    core.addTask({ title: 'ورزش ۱', categoryId: 'sport', due: '2026-09-28', time: '12:00' });
+    core.addTask({ title: 'ورزش ۲', categoryId: 'sport', due: '2026-09-28', time: '08:00' });
+    core.setManual('shop', true);
+    const [first, second] = core.list('shop').open.map((t) => t.id);
+    core.reorder('shop', [first, second].reverse());
+    expect(order('shop')).toEqual(['یک', 'دو']);
+    expect(order('sport')).toEqual(['ورزش ۲', 'ورزش ۱']);
+    // Automatic order by time; tasks at the same time list the newest first.
+    expect(titles(core.dashboard().tasks)).toEqual(['ورزش ۲', 'دو', 'ورزش ۱', 'یک']);
+  });
+
+  it('works for the Inbox and survives export and import', () => {
+    core.addTask({ title: 'اول' });
+    core.addTask({ title: 'دوم' });
+    core.setManual(null, true);
+    const [x, y] = core.list(null).open.map((t) => t.id);
+    core.reorder(null, [y, x]);
+    const json = core.exportBackup();
+    core.setManual(null, false);
+    core.importBackup(json);
+    expect(core.isManual(null)).toBe(true);
+    expect(order(null)).toEqual(['اول', 'دوم']);
+  });
+
+  it('puts a reopened task back where it was', () => {
+    core.addTask({ title: 'الف', categoryId: 'shop' });
+    const b = core.addTask({ title: 'ب', categoryId: 'shop' });
+    core.setManual('shop', true);
+    core.setDone(b.id, true);
+    expect(order('shop')).toEqual(['الف']);
+    core.setDone(b.id, false);
+    expect(order('shop')).toEqual(['ب', 'الف']);
+  });
+});
+
+describe('history and stats', () => {
+  const day = (iso: string, h = 12) => new Date(`${iso}T${String(h).padStart(2, '0')}:00:00+04:30`);
+  const finish = (title: string, categoryId: string | null, on: string) => {
+    clock.set(day(on));
+    const t = core.addTask({ title, categoryId });
+    core.setDone(t.id, true);
+    return t;
+  };
+
+  it('counts this week from Saturday, per category and in all', () => {
+    // 2026-09-26 is a Saturday, 2026-09-28 the Monday of this week; 2026-09-19 a Saturday of last week.
+    finish('دویدن ۱', 'sport', '2026-09-26');
+    finish('دویدن ۲', 'sport', '2026-09-28');
+    finish('دویدن ۳', 'sport', '2026-09-28');
+    finish('کتاب', 'study', '2026-09-28');
+    finish('هفتهٔ پیش', 'sport', '2026-09-20');
+    clock.set(day('2026-09-28'));
+    const sport = core.stats('sport');
+    expect(sport.days.map((d) => d.count)).toEqual([1, 0, 2, 0, 0, 0, 0]);
+    expect(sport.days[0].date).toBe('2026-09-26');
+    expect(sport.days.map((d) => d.future)).toEqual([false, false, false, true, true, true, true]);
+    expect(sport.weekTotal).toBe(3);
+    expect(sport.lastWeekTotal).toBe(1);
+    expect(core.stats('study').weekTotal).toBe(1);
+    expect(core.stats('all').weekTotal).toBe(4);
+    expect(core.stats(null).weekTotal).toBe(0);
+  });
+
+  it('counts the days in a row, and keeps the streak alive until the day is over', () => {
+    finish('الف', 'study', '2026-09-24');
+    finish('ب', 'study', '2026-09-25');
+    finish('ج', 'study', '2026-09-26');
+    clock.set(day('2026-09-27'));
+    expect(core.stats('study').streak).toBe(3);
+    finish('د', 'study', '2026-09-27');
+    expect(core.stats('study').streak).toBe(4);
+    clock.set(day('2026-09-29'));
+    expect(core.stats('study').streak).toBe(0);
+    finish('ه', 'study', '2026-09-30');
+    expect(core.stats('study').streak).toBe(1);
+  });
+
+  it('takes a completion back when the task is reopened or the completion undone', () => {
+    clock.set(day('2026-09-28'));
+    const a = core.addTask({ title: 'الف', categoryId: 'sport' });
+    core.setDone(a.id, true);
+    expect(core.stats('sport').today).toBe(1);
+    core.setDone(a.id, false);
+    expect(core.stats('sport').today).toBe(0);
+    core.setDone(a.id, true);
+    core.undo();
+    expect(core.stats('sport').today).toBe(0);
+  });
+
+  it('keeps the history after the completed tasks are cleared or deleted', () => {
+    clock.set(day('2026-09-28'));
+    const a = finish('الف', 'sport', '2026-09-28');
+    finish('ب', 'sport', '2026-09-28');
+    core.deleteTask(a.id);
+    core.clearCompleted('sport');
+    expect(core.search('')).toEqual([]);
+    expect(core.stats('sport').today).toBe(2);
+  });
+
+  it('counts a repeating task once per completion', () => {
+    clock.set(day('2026-09-28'));
+    const r = core.addTask({ title: 'دارو', categoryId: 'sport', due: '2026-09-28', repeat: { kind: 'daily' } });
+    core.setDone(r.id, true);
+    expect(core.stats('sport').today).toBe(1);
+  });
+
+  it('builds history from completed tasks for data saved before it existed', async () => {
+    const old = {
+      version: 1 as const,
+      categories: [{ id: 'sport', name: 'ورزش', emoji: '🏃', color: 'green' as const, order: 0 }],
+      settings: {},
+      tasks: [
+        { id: '1', title: 'الف', categoryId: 'sport', done: true, completedAt: '2026-09-28T09:00:00+04:30', createdAt: '2026-09-27T00:00:00Z' },
+        { id: '2', title: 'ب', categoryId: 'sport', done: true, completedAt: '2026-09-26T09:00:00+04:30', createdAt: '2026-09-27T00:00:00Z' },
+        { id: '3', title: 'ج', categoryId: 'sport', done: false, createdAt: '2026-09-27T00:00:00Z' },
+      ],
+    };
+    const reopened = await TaskCore.open({ clock, storage: new MemoryStorage(old as never) });
+    expect(reopened.stats('sport').days.map((d) => d.count)).toEqual([1, 0, 1, 0, 0, 0, 0]);
+  });
+
+  it('keeps the history through export and import', () => {
+    finish('الف', 'sport', '2026-09-28');
+    const json = core.exportBackup();
+    core.importBackup(json);
+    clock.set(day('2026-09-28'));
+    expect(core.stats('sport').weekTotal).toBe(1);
+  });
+});

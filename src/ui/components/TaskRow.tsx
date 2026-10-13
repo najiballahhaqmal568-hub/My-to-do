@@ -1,5 +1,6 @@
 import { motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import type { Task } from '../../core/types';
 import { formatDayShort, formatTime, repeatLabel } from '../../i18n';
 import { useApp } from '../context';
@@ -13,9 +14,13 @@ interface Props {
   showDate?: boolean;
   /** A projected future run of a repeating task: shown, but not completable. */
   projected?: boolean;
+  /** A drag handle for lists in manual order. */
+  handle?: ReactNode;
+  /** No entrance, exit or layout animation: the parent (a reorder list) moves the row itself. */
+  plain?: boolean;
 }
 
-export function TaskRow({ task, showCategory = true, showDate = false, projected = false }: Props) {
+export function TaskRow({ task, showCategory = true, showDate = false, projected = false, handle, plain = false }: Props) {
   const { core, lang, t, complete, openEditor, highlightId, reduceMotion } = useApp();
   const x = useMotionValue(0);
   const bgOpacity = useTransform(x, [-110, -12, 0, 12, 110], [1, 0.15, 0, 0.15, 1]);
@@ -37,12 +42,16 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
   return (
     <motion.div
       ref={rootRef}
-      layout="position"
       className={`swipe ${cat ? `c-${cat.color}` : 'c-inbox'}${fresh ? ' fresh' : ''}`}
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.18 } }}
-      transition={SPRING}
+      {...(plain
+        ? {}
+        : {
+            layout: 'position' as const,
+            initial: { opacity: 0, y: 14 },
+            animate: { opacity: 1, y: 0 },
+            exit: { opacity: 0, scale: 0.94, transition: { duration: 0.18 } },
+            transition: SPRING,
+          })}
       data-testid="task-row"
       data-title={task.title}
       data-task-id={task.id}
@@ -119,6 +128,7 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
         {!task.done && task.priority !== 'none' && (
           <span className={`pri ${task.priority}`}>{task.priority === 'high' ? t.important : task.priority === 'medium' ? t.priorityMedium : t.priorityLow}</span>
         )}
+        {handle}
       </motion.div>
     </motion.div>
   );

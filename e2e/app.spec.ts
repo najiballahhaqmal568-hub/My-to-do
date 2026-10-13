@@ -324,3 +324,62 @@ test('the home screen widget snapshot follows the tasks', async ({ page }) => {
   await expect.poll(async () => (await snap())?.summary).toBe('۱ از ۲ انجام شد');
   await expect.poll(async () => (await snap())?.items.map((i) => i.title)).toEqual(['دویدن']);
 });
+
+test('the weekly stats count completed tasks and the days in a row', async ({ page }) => {
+  await open(page);
+  await addTask(page, 'دویدن', { category: '🏃 ورزش' });
+  await addTask(page, 'تمرین', { category: '🏃 ورزش' });
+  await addTask(page, 'کتاب', { category: '📚 مطالعه' });
+  for (const title of ['دویدن', 'تمرین', 'کتاب']) await row(page, title).getByRole('button', { name: /انجام شد/ }).click();
+  // Clearing the completed tasks must not erase the history.
+  await page.getByTestId('open-stats').click();
+  await expect(page.getByTestId('stats')).toBeVisible();
+  await expect(page.getByTestId('stat-all').getByTestId('week-total')).toHaveText('این هفته: ۳ کار');
+  await expect(page.getByTestId('stat-sport').getByTestId('week-total')).toHaveText('این هفته: ۲ کار');
+  await expect(page.getByTestId('stat-study').getByTestId('week-total')).toHaveText('این هفته: ۱ کار');
+  await expect(page.getByTestId('stat-sport').getByTestId('streak')).toContainText('۱ روز پیاپی');
+  await expect(page.getByTestId('stat-shop').getByTestId('streak')).toContainText('امروز شروع کنید');
+  // Monday is the third day of a week that starts on Saturday.
+  await expect(page.getByTestId('stat-sport').locator('.bar-col').nth(2)).toHaveAttribute('data-count', '2');
+  await expect(page.getByTestId('stat-sport').locator('.bar-col').nth(3)).toHaveClass(/future/);
+});
+
+test('a list can be arranged by hand with the arrow keys and by dragging', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('cat-card-دوکان').click();
+  for (const title of ['اول', 'دوم', 'سوم']) await addTask(page, title);
+  const titles = () => page.getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
+  expect(await titles()).toEqual(['سوم', 'دوم', 'اول']);
+
+  await page.getByTestId('order-mode').click();
+  await expect(page.getByTestId('manual-list')).toBeVisible();
+  expect(await titles()).toEqual(['سوم', 'دوم', 'اول']);
+
+  // Keyboard: move «اول» up by one.
+  const handle = (title: string) => page.getByRole('button', { name: `جابه‌جایی: ${title}` });
+  await handle('اول').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(titles).toEqual(['سوم', 'اول', 'دوم']);
+
+  // Dragging: take «دوم» to the top.
+  const box = (await handle('دوم').boundingBox())!;
+  const top = (await handle('سوم').boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  const steps = 12;
+  for (let i = 1; i <= steps; i++) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - ((box.y - top.y + 30) * i) / steps);
+  await page.mouse.up();
+  await expect.poll(titles).toEqual(['دوم', 'سوم', 'اول']);
+
+  // The arrangement is kept, and a new task goes on top of it.
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByTestId('cat-card-دوکان').click();
+  await expect(page.getByTestId('manual-list')).toBeVisible();
+  await expect.poll(titles).toEqual(['دوم', 'سوم', 'اول']);
+  await addTask(page, 'چهارم');
+  await expect.poll(titles).toEqual(['چهارم', 'دوم', 'سوم', 'اول']);
+
+  // Back to automatic order: the newest first again.
+  await page.getByTestId('order-mode').click();
+  await expect.poll(titles).toEqual(['چهارم', 'سوم', 'دوم', 'اول']);
+});
