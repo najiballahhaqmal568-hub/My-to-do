@@ -42,16 +42,25 @@ export async function keepPrivateBackup(name: string, text: string): Promise<voi
 
 export interface ReleaseInfo {
   version: string;
+  /** The release page. */
   url: string;
+  /** Direct download of the APK, when the release has one. */
+  apkUrl: string | null;
 }
+
+/** Where the download button leads: the APK itself, or the release page. */
+export const downloadUrl = (r: ReleaseInfo): string => r.apkUrl ?? r.url;
 
 /** Asks GitHub for the latest release. Only the version is compared; no user data is sent. */
 export async function checkForUpdate(): Promise<ReleaseInfo | null> {
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
     if (!res.ok) return null;
-    const json = (await res.json()) as { tag_name?: string; html_url?: string };
-    if (json.tag_name && json.html_url && isNewer(json.tag_name, APP_VERSION)) return { version: json.tag_name.replace(/^v/, ''), url: json.html_url };
+    const json = (await res.json()) as { tag_name?: string; html_url?: string; assets?: { name?: string; browser_download_url?: string }[] };
+    if (json.tag_name && json.html_url && isNewer(json.tag_name, APP_VERSION)) {
+      const apk = json.assets?.find((a) => a.name?.endsWith('.apk') && a.browser_download_url?.startsWith('https://'));
+      return { version: json.tag_name.replace(/^v/, ''), url: json.html_url, apkUrl: apk?.browser_download_url ?? null };
+    }
     return null;
   } catch {
     return null;

@@ -28,7 +28,7 @@ async function addTask(page: Page, title: string, opts: { category?: string; pri
   if (opts.time) await setTime(page, opts.time);
   if (opts.reminder) await page.getByRole('dialog').getByRole('button', { name: opts.reminder, exact: true }).click();
   if (opts.subtask) await page.getByRole('dialog').getByPlaceholder('زیرکار جدید').fill(opts.subtask);
-  await page.getByRole('button', { name: 'ذخیره' }).click();
+  await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 }
 
@@ -71,7 +71,7 @@ test('raising the priority moves a task up', async ({ page }) => {
   await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'دوم');
   await row(page, 'اول').getByText('اول').click();
   await page.getByRole('dialog').getByRole('button', { name: 'بالا', exact: true }).click();
-  await page.getByRole('button', { name: 'ذخیره' }).click();
+  await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
   await expect(page.getByTestId('task-row').first()).toHaveAttribute('data-title', 'اول');
 });
 
@@ -142,7 +142,7 @@ test('a reminder and the bedtime summary are planned', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'فردا', exact: true }).click();
   await setTime(page, '16:00');
   await page.getByRole('dialog').getByRole('button', { name: '۱۵ دقیقه قبل' }).click();
-  await page.getByRole('button', { name: 'ذخیره' }).click();
+  await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __notificationPlan?: { link: string; title: string; at: string }[] }).__notificationPlan ?? []))
     .toEqual(
@@ -200,7 +200,7 @@ test('tasks without a date appear in their own dashboard section', async ({ page
   await page.locator('#task-title').fill('بی‌تاریخ');
   await page.getByTestId('date-field').click();
   await page.getByRole('dialog').getByRole('button', { name: 'بدون تاریخ', exact: true }).click();
-  await page.getByRole('button', { name: 'ذخیره' }).click();
+  await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
   await expect(page.getByTestId('undated')).toContainText('بی‌تاریخ');
 });
 
@@ -217,7 +217,7 @@ test('shows times on the 12-hour clock in Dari and lets the user pick them that 
   await row(page, 'حساب').getByText('حساب').click();
   await expect(page.locator('#task-time-hour')).toHaveValue('20');
   await expect(page.locator('#task-time-hour').locator('option:checked')).toHaveText('۸ شب');
-  await page.getByRole('dialog').getByRole('button', { name: 'ذخیره' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'ذخیره', exact: true }).click();
 });
 
 test('the bedtime time is chosen on the 12-hour clock too', async ({ page }) => {
@@ -227,4 +227,65 @@ test('the bedtime time is chosen on the 12-hour clock too', async ({ page }) => 
   await page.locator('#bedtime-time-minute').selectOption('30');
   await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
   await expect(page.getByText('اعلان فردا ۹:۳۰ شب')).toBeVisible();
+});
+
+test('save and add another keeps the category and date and clears the rest', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('cat-card-دوکان').click();
+  await page.getByTestId('fab').click();
+  await page.locator('#task-title').fill('جنس اول');
+  await page.getByRole('dialog').getByRole('button', { name: 'بالا', exact: true }).click();
+  await page.getByTestId('save-and-add').click();
+  await expect(page.getByTestId('added-note')).toContainText('۱ کار اضافه شد');
+  await expect(page.locator('#task-title')).toHaveValue('');
+  await expect(page.locator('#task-title')).toBeFocused();
+  await expect(page.getByRole('dialog').getByRole('button', { name: '🏪 دوکان' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'بدون', exact: true }).first()).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#task-title').fill('جنس دوم');
+  await page.getByTestId('save-and-add').click();
+  await expect(page.getByTestId('added-note')).toContainText('۲ کار اضافه شد');
+  await page.locator('#task-title').fill('جنس سوم');
+  await page.getByRole('dialog').getByRole('button', { name: 'ذخیره', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(row(page, 'جنس اول')).toBeVisible();
+  await expect(row(page, 'جنس دوم')).toBeVisible();
+  await expect(row(page, 'جنس سوم')).toBeVisible();
+  // The high-priority task stays first; among the others the newest comes first.
+  const order = await page.getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
+  expect(order).toEqual(['جنس اول', 'جنس سوم', 'جنس دوم']);
+});
+
+test('the update message links straight to the APK', async ({ page }) => {
+  await page.route('https://api.github.com/**', (route) =>
+    route.fulfill({
+      json: {
+        tag_name: 'v9.9.9',
+        html_url: 'https://github.com/example/releases/tag/v9.9.9',
+        assets: [{ name: 'my-to-do-9.9.9.apk', browser_download_url: 'https://github.com/example/releases/download/v9.9.9/my-to-do-9.9.9.apk' }],
+      },
+    }),
+  );
+  await open(page);
+  await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
+  await page.getByRole('button', { name: 'بررسی نسخهٔ جدید' }).click();
+  await expect(page.getByRole('link', { name: 'دانلود' })).toHaveAttribute('href', 'https://github.com/example/releases/download/v9.9.9/my-to-do-9.9.9.apk');
+});
+
+test('a backup is saved automatically once a day and on demand', async ({ page }) => {
+  await open(page);
+  await addTask(page, 'نگه‌داشتنی');
+  await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
+  const backups = () => page.evaluate(() => (window as unknown as { __autoBackups?: { name: string; text: string }[] }).__autoBackups ?? []);
+  await expect.poll(async () => (await backups()).length).toBeGreaterThanOrEqual(1);
+  const first = (await backups())[0];
+  expect(first.name).toBe('my-to-do-2026-09-28.json');
+  expect(JSON.parse(first.text)).toMatchObject({ app: 'my-to-do' });
+  await expect(page.getByTestId('last-backup')).toHaveText('دوشنبه، ۶ میزان');
+  const before = (await backups()).length;
+  await page.getByRole('button', { name: 'همین حالا پشتیبان بگیر' }).click();
+  await expect(page.getByText('پشتیبان در پوشهٔ Download/My-To-Do ذخیره شد.')).toBeVisible();
+  expect((await backups()).length).toBe(before + 1);
+  // Turning the daily backup off stops it.
+  await page.getByRole('switch', { name: 'پشتیبان خودکار روزانه' }).click();
+  await expect(page.getByRole('switch', { name: 'پشتیبان خودکار روزانه' })).toHaveAttribute('aria-checked', 'false');
 });

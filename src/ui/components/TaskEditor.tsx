@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CoreError } from '../../core/core';
 import type { Priority, ReminderOffset, RepeatRule, TaskInput } from '../../core/types';
 import { WEEK_ORDER, digits, formatDay, priorityLabel, shortWeekday } from '../../i18n';
@@ -39,6 +39,8 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
   const [newSub, setNewSub] = useState('');
   const [pickDate, setPickDate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addedCount, setAddedCount] = useState(0);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const cats = core.categories();
   const reminderLabel = (r: ReminderOffset | null) =>
@@ -61,7 +63,8 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
     setNewSub('');
   }
 
-  async function save() {
+  /** Saves the task. With `addAnother` the sheet stays open, keeps the category and date, and clears the rest. */
+  async function save(addAnother = false) {
     const pending = newSub.trim() ? [...subs, { title: newSub.trim(), done: false }] : subs;
     const input: TaskInput = {
       title,
@@ -84,7 +87,20 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
       );
       return;
     }
-    onClose();
+    if (addAnother) {
+      setAddedCount((n) => n + 1);
+      setTitle('');
+      setNotes('');
+      setTime('');
+      setPriority('none');
+      setRepeatKind('none');
+      setWeekdays([]);
+      setReminder(null);
+      setSubs([]);
+      setNewSub('');
+      setError(null);
+      titleRef.current?.focus();
+    } else onClose();
     if (input.reminder) {
       const askExact = !core.settings.exactAlarmAsked;
       await notifications.ensurePermission(askExact);
@@ -120,10 +136,16 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
         </button>
       </div>
 
+      {addedCount > 0 && (
+        <div className="added-note" role="status" data-testid="added-note">
+          ✓ {t.addedCount(addedCount)}
+        </div>
+      )}
       <div className="field">
         <label htmlFor="task-title">{t.title}</label>
         <input
           id="task-title"
+          ref={titleRef}
           className="input big"
           value={title}
           autoFocus={!existing}
@@ -282,6 +304,12 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
         <button type="submit" className="btn primary">
           {t.save}
         </button>
+        {!existing && (
+          <button type="button" className="btn" data-testid="save-and-add" onClick={() => save(true)}>
+            <Icon name="plus" small />
+            {t.saveAndAddNext}
+          </button>
+        )}
         {existing?.repeat && !existing.done && (
           <button type="button" className="btn" onClick={skip}>
             <Icon name="skip" small />

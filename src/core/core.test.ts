@@ -378,6 +378,8 @@ describe('backup', () => {
 });
 
 describe('notification plan', () => {
+  beforeEach(() => core.updateSettings({ backupReminder: false }));
+
   it('plans a reminder for each offset and drops it once the task is done', () => {
     const offsets = [
       ['atTime', '2026-09-28T18:00:00+04:30'],
@@ -448,5 +450,42 @@ describe('notification plan', () => {
     core.addTask({ title: 'x', due: '2026-09-29' });
     expect(core.notificationPlan()[0].id).toBe(core.notificationPlan()[0].id);
     expect(core.notificationPlan()[0].id).toBeGreaterThan(0);
+  });
+});
+
+describe('automatic backup settings', () => {
+  it('turns the daily backup and the weekly reminder on by default', () => {
+    expect(core.settings).toMatchObject({ autoBackup: true, lastBackup: null, backupReminder: true });
+  });
+
+  it('gives defaults to data saved before these settings existed', async () => {
+    const old = { version: 1 as const, tasks: [], categories: [], settings: { language: 'en' as const, bedtimeEnabled: false, bedtimeTime: '21:00', exactAlarmAsked: true } };
+    const reopened = await TaskCore.open({ clock, storage: new MemoryStorage(old as never) });
+    expect(reopened.settings).toMatchObject({ language: 'en', bedtimeTime: '21:00', autoBackup: true, backupReminder: true, lastBackup: null });
+  });
+
+  it('plans a reminder for each of the next four Fridays at 10:00', () => {
+    core.updateSettings({ bedtimeEnabled: false });
+    const reminders = core.notificationPlan().filter((p) => p.link === 'backup');
+    expect(reminders.map((p) => p.at.toISOString())).toEqual(
+      ['2026-10-02', '2026-10-09', '2026-10-16', '2026-10-23'].map((d) => new Date(`${d}T10:00:00+04:30`).toISOString()),
+    );
+    expect(reminders[0].title).toBe('پشتیبان کارهایتان را نگه دارید');
+  });
+
+  it('skips a Friday reminder that has already passed and respects the switch', () => {
+    core.updateSettings({ bedtimeEnabled: false });
+    clock.set(new Date('2026-10-02T11:00:00+04:30'));
+    expect(core.notificationPlan().filter((p) => p.link === 'backup')[0].at.toISOString()).toBe(new Date('2026-10-09T10:00:00+04:30').toISOString());
+    core.updateSettings({ backupReminder: false });
+    expect(core.notificationPlan()).toEqual([]);
+  });
+
+  it('keeps the last backup day through export and import', () => {
+    core.updateSettings({ lastBackup: '2026-09-28' });
+    const json = core.exportBackup();
+    core.updateSettings({ lastBackup: null });
+    core.importBackup(json);
+    expect(core.settings.lastBackup).toBe('2026-09-28');
   });
 });

@@ -5,6 +5,7 @@ import { addDays } from '../core/dates';
 import type { TaskCore } from '../core/core';
 import { MESSAGES } from '../i18n';
 import { hapticSuccess, hapticTap, onBackButton, onResume } from '../platform/device';
+import { backupName, saveBackup } from '../platform/backup';
 import { notifications } from '../platform/notifications';
 import { CategoryEditor } from './components/CategoryEditor';
 import { Dialog, Sheet, Toast, type DialogState, type ToastState } from './components/Overlays';
@@ -61,6 +62,20 @@ export function App({ core }: { core: TaskCore }) {
     });
     return () => window.clearInterval(id);
   }, []);
+
+  // Once a day, while the app is in use, save a backup file (and try again the next day if that fails).
+  const backingUp = useRef(false);
+  const backupFailedOn = useRef<string | null>(null);
+  useEffect(() => {
+    const today = core.today();
+    const { autoBackup, lastBackup } = core.settings;
+    if (!autoBackup || lastBackup === today || backupFailedOn.current === today || backingUp.current) return;
+    backingUp.current = true;
+    saveBackup(backupName(today), core.exportBackup())
+      .then((r) => (r.saved ? core.updateSettings({ lastBackup: today }) : (backupFailedOn.current = today)))
+      .catch(() => (backupFailedOn.current = today))
+      .finally(() => (backingUp.current = false));
+  }, [core, version, minute, resumes]);
 
   // Every change to the data re-plans the scheduled notifications.
   useEffect(() => {
@@ -140,6 +155,8 @@ export function App({ core }: { core: TaskCore }) {
           void el.offsetWidth;
           el.classList.add('flash');
         }, 350);
+      } else if (link === 'backup') {
+        setStack([{ name: 'dashboard' }, { name: 'settings' }]);
       } else if (link.startsWith('task:') && core.task(link.slice(5))) {
         setEditor({ taskId: link.slice(5) });
       }
