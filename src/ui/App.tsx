@@ -7,6 +7,8 @@ import { MESSAGES } from '../i18n';
 import { hapticSuccess, hapticTap, isNative, minimizeApp, onBackButton, onResume } from '../platform/device';
 import { backupName, saveBackup } from '../platform/backup';
 import { notifications } from '../platform/notifications';
+import { updateWidget } from '../platform/widget';
+import { widgetSnapshot } from '../core/widget';
 import { CategoryEditor } from './components/CategoryEditor';
 import { Dialog, Sheet, Toast, type DialogState, type ToastState } from './components/Overlays';
 import { TaskEditor } from './components/TaskEditor';
@@ -75,6 +77,12 @@ export function App({ core }: { core: TaskCore }) {
       .then((r) => (r.saved ? core.updateSettings({ lastBackup: today }) : (backupFailedOn.current = today)))
       .catch(() => (backupFailedOn.current = today))
       .finally(() => (backingUp.current = false));
+  }, [core, version, minute, resumes]);
+
+  // The home screen widget shows today's tasks: keep its snapshot current as data and the day change.
+  useEffect(() => {
+    const id = window.setTimeout(() => updateWidget(widgetSnapshot(core)), 300);
+    return () => window.clearTimeout(id);
   }, [core, version, minute, resumes]);
 
   // Every change to the data re-plans the scheduled notifications.

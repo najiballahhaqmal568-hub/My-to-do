@@ -78,6 +78,15 @@ shot('3-dashboard-with-task');
 const alarms = sh('adb shell dumpsys alarm');
 check(alarms.includes(PKG), 'Android has alarms scheduled for the app');
 
+// The home screen widget: registered with Android, fed by the app, and able to draw itself.
+const widgets = sh('adb shell dumpsys appwidget');
+check(widgets.includes('app.mytodo.personal/.TodayWidgetProvider') || widgets.includes(`${PKG}.TodayWidgetProvider`), 'the home screen widget is registered with Android');
+const stored = sh(`adb shell "run-as ${PKG} cat shared_prefs/widget.xml"`);
+check(stored.includes('آزمایش یادآوری') && stored.includes('staleHint'), 'the app stored today\'s snapshot for the widget');
+const drawn = await page.evaluate(() => window.__widget?.selfTest());
+const drawnText = (drawn?.texts ?? []).join(' | ');
+check(drawn?.ok === true && drawnText.includes('آزمایش یادآوری'), `the widget draws in both directions with today's tasks (${drawn?.error ?? drawnText})`);
+
 // The automatic daily backup is written into the public Download/My-To-Do folder.
 let files = '';
 for (let i = 0; i < 10 && !/my-to-do-\d{4}-\d{2}-\d{2}\.json/.test(files); i++) {
