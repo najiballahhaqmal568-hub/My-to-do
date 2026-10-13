@@ -383,3 +383,29 @@ textarea.input { resize: vertical; min-height: 70px; }
 }
 
 .added-note { margin: -4px 0 12px; padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; font-size: 13.5px; }
+
+/* ---------- manual order ---------- */
+.mode-row { display: flex; align-items: center; gap: 10px; margin: -4px 0 12px; flex-wrap: wrap; }
+.mode-hint { font-size: 12.5px; }
+.seg-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 99px; background: var(--surface); border: 1.5px solid var(--line); font-size: 13.5px; font-weight: 700; }
+.seg-btn[aria-pressed='true'] { background: var(--cat, var(--accent)); border-color: var(--cat, var(--accent)); color: #fff; }
+.drag-handle { flex: none; width: 36px; height: 44px; display: grid; place-items: center; color: var(--muted); cursor: grab; touch-action: none; border-radius: 12px; }
+.drag-handle svg { stroke-width: 3.4; }
+.drag-handle:active { cursor: grabbing; }
+
+/* ---------- stats ---------- */
+.stat-card { padding: 16px; border-radius: 24px; background: var(--surface); box-shadow: 0 1px 3px var(--shadow); }
+.stat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stat-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; }
+.stat-name .e { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 12px; background: var(--cc); font-size: 18px; }
+.chip.streak { background: color-mix(in srgb, var(--cc) 18%, transparent); font-weight: 700; }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 14px; height: 110px; }
+.bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.bar-col .n { font-size: 11.5px; font-weight: 700; height: 16px; color: var(--muted); }
+.bar-col .track { flex: 1; width: 100%; display: flex; align-items: flex-end; border-radius: 8px; background: color-mix(in srgb, var(--ink) 6%, transparent); overflow: hidden; }
+.bar-col .track i { display: block; width: 100%; min-height: 0; border-radius: 8px; background: var(--cat); }
+.bar-col .wd { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.bar-col.today .wd { color: var(--ink); font-weight: 800; }
+.bar-col.today .n { color: var(--ink); }
+.bar-col.future .track { background: transparent; border: 1.5px dashed var(--line); }
+.stat-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 13px; font-weight: 700; flex-wrap: wrap; }

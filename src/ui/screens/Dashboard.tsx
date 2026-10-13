@@ -25,6 +25,9 @@ export function Dashboard() {
           <div className="sub">{greeting}</div>
           <h1 data-testid="today-date">{formatDay(lang, d.today)}</h1>
         </div>
+        <button className="icon-btn" aria-label={t.stats} data-testid="open-stats" onClick={() => navigate({ name: 'stats' })}>
+          <Icon name="chart" />
+        </button>
         <button className="icon-btn" aria-label={t.search} onClick={() => navigate({ name: 'search' })}>
           <Icon name="search" />
         </button>

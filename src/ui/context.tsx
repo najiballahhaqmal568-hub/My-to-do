@@ -9,6 +9,7 @@ export type Route =
   | { name: 'categories' }
   | { name: 'list'; categoryId: string | null }
   | { name: 'search' }
+  | { name: 'stats' }
   | { name: 'settings' };
 
 export interface EditorRequest {

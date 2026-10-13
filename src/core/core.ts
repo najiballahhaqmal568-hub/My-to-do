@@ -68,6 +68,16 @@ export interface DayGroup {
   items: Occurrence[];
 }
 
+export interface CategoryStats {
+  /** This week, Saturday first. */
+  days: { date: ISODate; count: number; future: boolean }[];
+  weekTotal: number;
+  lastWeekTotal: number;
+  /** Days in a row with at least one completed task, counting back from today (or yesterday if today has none yet). */
+  streak: number;
+  today: number;
+}
+
 export interface SearchFilters {
   priority?: Priority | null;
   status?: 'all' | 'open' | 'done';
@@ -82,6 +92,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoBackup: true,
   lastBackup: null,
   backupReminder: true,
+  manualLists: [],
 };
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, none: 3 };
 const REMINDER_MINUTES = { atTime: 0, '15m': 15, '1h': 60, '1d': 1440 } as const;
@@ -99,8 +110,11 @@ export function seedData(): Data {
     tasks: [],
     categories: [cat('sport', 'ورزش', '🏃', 'green', 0), cat('shop', 'دوکان', '🏪', 'orange', 1), cat('study', 'مطالعه', '📚', 'indigo', 2)],
     settings: { ...DEFAULT_SETTINGS },
+    history: {},
   };
 }
+
+const listKey = (categoryId: string | null) => categoryId ?? '_inbox';
 
 /** A stable positive 31-bit id for a notification key (FNV-1a). */
 export function notificationId(key: string): number {
@@ -159,8 +173,21 @@ export class TaskCore {
     this.listeners.forEach((fn) => fn());
   }
 
-  private setTasks(tasks: Task[]) {
-    this.commit({ ...this.data, tasks });
+  private setTasks(tasks: Task[], history = this.data.history) {
+    this.commit({ ...this.data, tasks, history });
+  }
+
+  /** A copy of the history with one completion added to (or taken from) a day. */
+  private bumped(categoryId: string | null, day: ISODate, delta: number): Data['history'] {
+    const history = { ...this.data.history };
+    const dayCounts = { ...(history[day] ?? {}) };
+    const key = listKey(categoryId);
+    const next = (dayCounts[key] ?? 0) + delta;
+    if (next > 0) dayCounts[key] = next;
+    else delete dayCounts[key];
+    if (Object.keys(dayCounts).length) history[day] = dayCounts;
+    else delete history[day];
+    return history;
   }
 
   private find(id: string): Task {
@@ -187,8 +214,9 @@ export class TaskCore {
 
   addTask(input: TaskInput): Task {
     const task = this.build({ id: newId(), createdAt: this.now().toISOString(), done: false, completedAt: null, spawnedId: null }, input);
-    this.setTasks([...this.data.tasks, task]);
-    return task;
+    const placed = this.isManual(task.categoryId) ? { ...task, pos: this.topPos(task.categoryId) } : task;
+    this.setTasks([...this.data.tasks, placed]);
+    return placed;
   }
 
   updateTask(id: string, patch: Partial<TaskInput>): Task {
@@ -209,7 +237,8 @@ export class TaskCore {
       reminder: patch.reminder !== undefined ? patch.reminder : old.reminder,
       subtasks: patch.subtasks ?? old.subtasks,
     };
-    const task = this.build({ ...old, snoozedUntil: null }, merged);
+    let task = this.build({ ...old, snoozedUntil: null }, merged);
+    if (task.categoryId !== old.categoryId && this.isManual(task.categoryId)) task = { ...task, pos: this.topPos(task.categoryId) };
     this.setTasks(this.replace(task));
     return task;
   }
@@ -270,14 +299,19 @@ export class TaskCore {
         tasks = [...tasks, next];
       }
       this.lastUndo = { kind: 'complete', before: task };
-      this.setTasks(this.replace(completed, tasks));
+      this.setTasks(this.replace(completed, tasks), this.bumped(task.categoryId, this.today(), 1));
     } else {
       this.lastUndo = null;
-      this.setTasks(this.reopen(task));
+      this.setTasks(this.reopen(task), this.uncounted(task));
     }
   }
 
   /** Reopens a completed task and removes the next occurrence it created, unless that one is already done. */
+  /** The history without the completion of a task that is being reopened. */
+  private uncounted(task: Task): Data['history'] {
+    return task.done && task.completedAt ? this.bumped(task.categoryId, localISO(new Date(task.completedAt)), -1) : this.data.history;
+  }
+
   private reopen(task: Task, restored?: Task): Task[] {
     const spawned = task.spawnedId ? this.data.tasks.find((x) => x.id === task.spawnedId) : undefined;
     const tasks = spawned && !spawned.done ? this.data.tasks.filter((x) => x.id !== spawned.id) : this.data.tasks;
@@ -307,7 +341,7 @@ export class TaskCore {
     } else {
       const current = this.data.tasks.find((x) => x.id === u.before.id);
       if (!current) return null;
-      this.setTasks(this.reopen(current, u.before));
+      this.setTasks(this.reopen(current, u.before), this.uncounted(current));
     }
     return u.kind;
   }
@@ -516,10 +550,71 @@ export class TaskCore {
   /** A category's tasks, or the Inbox's when `categoryId` is null. */
   list(categoryId: string | null): ListView {
     const mine = this.data.tasks.filter((t) => t.categoryId === categoryId);
+    const open = mine.filter((t) => !t.done);
     return {
-      open: this.sort(mine.filter((t) => !t.done)),
+      open: this.isManual(categoryId) ? this.manualSort(open) : this.sort(open),
       done: mine.filter((t) => t.done).sort((a, b) => ((a.completedAt ?? '') < (b.completedAt ?? '') ? 1 : -1)),
     };
+  }
+
+  /* ---------------- manual order ---------------- */
+
+  isManual(categoryId: string | null): boolean {
+    return this.data.settings.manualLists.includes(listKey(categoryId));
+  }
+
+  /** Switches a list between automatic and manual order. Turning manual on keeps the order you see now. */
+  setManual(categoryId: string | null, on: boolean): void {
+    if (on === this.isManual(categoryId)) return;
+    const key = listKey(categoryId);
+    let tasks = this.data.tasks;
+    if (on) {
+      const frozen = new Map(this.sort(tasks.filter((t) => t.categoryId === categoryId && !t.done)).map((t, i) => [t.id, i]));
+      tasks = tasks.map((t) => (frozen.has(t.id) ? { ...t, pos: frozen.get(t.id)! } : t));
+    }
+    const manualLists = on ? [...this.data.settings.manualLists, key] : this.data.settings.manualLists.filter((k) => k !== key);
+    this.commit({ ...this.data, tasks, settings: { ...this.data.settings, manualLists } });
+  }
+
+  /** Puts the given tasks of a manual list in this order. */
+  reorder(categoryId: string | null, orderedIds: string[]): void {
+    const pos = new Map(orderedIds.map((id, i) => [id, i]));
+    this.setTasks(this.data.tasks.map((t) => (t.categoryId === categoryId && pos.has(t.id) ? { ...t, pos: pos.get(t.id)! } : t)));
+  }
+
+  /** A position above every task already placed in the list. */
+  private topPos(categoryId: string | null): number {
+    const placed = this.data.tasks.filter((t) => t.categoryId === categoryId && t.pos != null && !t.done).map((t) => t.pos as number);
+    return placed.length ? Math.min(...placed) - 1 : 0;
+  }
+
+  private manualSort(tasks: Task[]): Task[] {
+    const added = this.addedOrder();
+    return [...tasks].sort((a, b) => (a.pos ?? -1e9) - (b.pos ?? -1e9) || (added.get(b.id) ?? 0) - (added.get(a.id) ?? 0));
+  }
+
+  /* ---------------- history and stats ---------------- */
+
+  /**
+   * How many tasks were completed each day of this week (Saturday to Friday) in a category, in all
+   * categories (`'all'`), or in the Inbox (`null`), with the streak of days in a row and last week's total.
+   */
+  stats(categoryId: string | null | 'all'): CategoryStats {
+    const today = this.today();
+    const count = (day: ISODate): number => {
+      const counts = this.data.history[day];
+      if (!counts) return 0;
+      return categoryId === 'all' ? Object.values(counts).reduce((a, b) => a + b, 0) : (counts[listKey(categoryId)] ?? 0);
+    };
+    const start = addDays(today, -((weekday(today) + 1) % 7));
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(start, i);
+      return { date, count: date > today ? 0 : count(date), future: date > today };
+    });
+    let streak = 0;
+    for (let d = count(today) > 0 ? today : addDays(today, -1); count(d) > 0 && streak < 3650; d = addDays(d, -1)) streak++;
+    const lastWeekTotal = Array.from({ length: 7 }, (_, i) => count(addDays(start, i - 7))).reduce((a, b) => a + b, 0);
+    return { days, weekTotal: days.reduce((a, d) => a + d.count, 0), lastWeekTotal, streak, today: count(today) };
   }
 
   openCount(categoryId: string | null): number {
@@ -616,12 +711,20 @@ export class TaskCore {
   }
 }
 
+/** History for data saved before it was kept: built from the tasks that are already completed. */
+function historyFromTasks(tasks: Task[]): Data['history'] {
+  const history: Data['history'] = {};
+  for (const t of tasks) {
+    if (!t.done || !t.completedAt) continue;
+    const day = localISO(new Date(t.completedAt));
+    history[day] ??= {};
+    history[day][listKey(t.categoryId ?? null)] = (history[day][listKey(t.categoryId ?? null)] ?? 0) + 1;
+  }
+  return history;
+}
+
 function withDefaults(d: Data): Data {
-  return {
-    version: 1,
-    categories: d.categories ?? [],
-    settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
-    tasks: (d.tasks ?? []).map((t) => ({
+  const tasks = (d.tasks ?? []).map((t) => ({
       notes: '',
       categoryId: null,
       due: null,
@@ -635,7 +738,13 @@ function withDefaults(d: Data): Data {
       createdAt: new Date(0).toISOString(),
       spawnedId: null,
       ...(t as Partial<Task>),
-    })) as Task[],
+    })) as Task[];
+  return {
+    version: 1,
+    categories: d.categories ?? [],
+    settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
+    tasks,
+    history: d.history ?? historyFromTasks(tasks),
   };
 }
 

@@ -42,6 +42,8 @@ export interface Task {
   spawnedId?: string | null;
   /** Set when the user pressed «بعداً» on a reminder: the moment it should ring again. */
   snoozedUntil?: string | null;
+  /** Position in a list that is in manual order (smaller is higher). */
+  pos?: number | null;
 }
 
 export type CategoryColor = 'green' | 'orange' | 'indigo' | 'rose' | 'teal' | 'violet' | 'amber' | 'sky';
@@ -66,6 +68,8 @@ export interface Settings {
   lastBackup: string | null;
   /** A reminder every Friday to move a backup somewhere safe. */
   backupReminder: boolean;
+  /** Lists the user arranged by hand: category ids, or `_inbox`. */
+  manualLists: string[];
 }
 
 export interface Data {
@@ -73,6 +77,8 @@ export interface Data {
   tasks: Task[];
   categories: Category[];
   settings: Settings;
+  /** Tasks completed per day and category (`_inbox` for none), kept even after the tasks are deleted. */
+  history: Record<string, Record<string, number>>;
 }
 
 export interface TaskInput {

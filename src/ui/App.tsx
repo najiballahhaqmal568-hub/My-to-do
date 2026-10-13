@@ -21,6 +21,7 @@ import { Dashboard } from './screens/Dashboard';
 import { ListScreen } from './screens/ListScreen';
 import { Search } from './screens/Search';
 import { Settings } from './screens/Settings';
+import { Stats } from './screens/Stats';
 import { Upcoming } from './screens/Upcoming';
 
 const TABS: { route: Route['name']; icon: IconName; label: 'dashboard' | 'upcoming' | 'categories' | 'settings' }[] = [
@@ -243,9 +244,12 @@ export function App({ core }: { core: TaskCore }) {
     case 'settings':
       screen = <Settings />;
       break;
+    case 'stats':
+      screen = <Stats />;
+      break;
   }
 
-  const activeTab = route.name === 'list' || route.name === 'search' ? (stack.find((r) => r.name !== 'dashboard')?.name ?? 'dashboard') : route.name;
+  const activeTab = route.name === 'list' || route.name === 'search' || route.name === 'stats' ? (stack.find((r) => r.name !== 'dashboard')?.name ?? 'dashboard') : route.name;
 
   return (
     <MotionConfig reducedMotion="user">
