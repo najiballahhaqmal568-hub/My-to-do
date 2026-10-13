@@ -41,5 +41,5 @@ See `CONTEXT.md` for the domain vocabulary and `docs/adr/` for decisions.
 
 ## Signing
 
-Releases are signed with the public key in `android/app/public-release.keystore` (ADR 0001). To make updates impossible to forge, the repository also holds an encrypted private key; adding its passphrase as the GitHub secret `SIGNING_PASSPHRASE` switches releases to it without stranding installed apps (ADR 0003, Android 9 or newer). Without the secret nothing changes.
+Releases are signed with the public key in `android/app/public-release.keystore` (ADR 0001). To make updates impossible to forge, the repository also holds an encrypted private key; adding its passphrase as the GitHub secret `SIGNING_PASSPHRASE` switches releases to it without stranding installed apps (ADR 0003). Without the secret nothing changes.
 

@@ -3,7 +3,7 @@
 #
 # The Gradle build signs with the public key committed in android/app (ADR 0001). When a private key is
 # available, this script signs the APK again with it and adds a key rotation lineage from the public key, so
-# a phone that has an earlier build installed still accepts the update (Android 9 and newer).
+# a phone that has an earlier build installed still accepts the update.
 #
 # The private key is release/private-release.p12.enc, encrypted with the passphrase that the owner keeps in
 # the GitHub secret SIGNING_PASSPHRASE (ADR 0003). Tests can supply a throwaway key instead through
@@ -35,7 +35,12 @@ export OLD_PASS=mytodo-public NEW_KEY_PASS
   --old-signer --ks "$HERE/android/app/public-release.keystore" --ks-key-alias mytodo --ks-pass env:OLD_PASS --key-pass env:OLD_PASS \
   --new-signer --ks "$NEW_KEYSTORE" --ks-key-alias "${NEW_KEY_ALIAS:-mytodo-private}" --ks-pass env:NEW_KEY_PASS --key-pass env:NEW_KEY_PASS
 
-"$APKSIGNER" sign --ks "$NEW_KEYSTORE" --ks-key-alias "${NEW_KEY_ALIAS:-mytodo-private}" --ks-pass env:NEW_KEY_PASS --key-pass env:NEW_KEY_PASS \
+# Two signers: the oldest (the public key) signs the v1 and v2 layers that Android 7 and 8 read, so those
+# phones keep accepting updates; the newest (the private key) signs the v3 layer with the lineage, which
+# Android 9 and newer read and which stops anyone with only the public key from updating them.
+"$APKSIGNER" sign \
+  --ks "$HERE/android/app/public-release.keystore" --ks-key-alias mytodo --ks-pass env:OLD_PASS --key-pass env:OLD_PASS \
+  --next-signer --ks "$NEW_KEYSTORE" --ks-key-alias "${NEW_KEY_ALIAS:-mytodo-private}" --ks-pass env:NEW_KEY_PASS --key-pass env:NEW_KEY_PASS \
   --lineage "$WORK/lineage" --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
   --out "$OUT" "$IN"
 
