@@ -310,3 +310,17 @@ test('the done and later buttons on a reminder work', async ({ page }) => {
     .poll(async () => (await plan()).filter((p) => p.link === `task:${call}`).map((p) => p.at))
     .toContain(new Date('2026-09-28T09:15:00+04:30').toISOString());
 });
+
+test('the home screen widget snapshot follows the tasks', async ({ page }) => {
+  await open(page);
+  type Snap = { title: string; summary: string; items: { title: string; time: string; overdue: boolean }[]; tomorrow: string };
+  const snap = () => page.evaluate(() => (window as unknown as { __widgetSnapshot?: Snap }).__widgetSnapshot);
+  await expect.poll(async () => (await snap())?.title).toBe('دوشنبه، ۶ میزان');
+  await addTask(page, 'سفارش', { time: '10:00', category: '🏪 دوکان' });
+  await addTask(page, 'دویدن', { category: '🏃 ورزش' });
+  await expect.poll(async () => (await snap())?.items.map((i) => i.title)).toEqual(['سفارش', 'دویدن']);
+  expect((await snap())!.items[0].time).toBe('۱۰:۰۰ صبح');
+  await row(page, 'سفارش').getByRole('button', { name: /انجام شد/ }).click();
+  await expect.poll(async () => (await snap())?.summary).toBe('۱ از ۲ انجام شد');
+  await expect.poll(async () => (await snap())?.items.map((i) => i.title)).toEqual(['دویدن']);
+});

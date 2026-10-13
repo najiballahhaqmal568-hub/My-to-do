@@ -538,3 +538,49 @@ describe('reminder buttons', () => {
     expect(next.snoozedUntil).toBeNull();
   });
 });
+
+describe('home screen widget snapshot', () => {
+  it('lists open tasks for today, overdue first, with category colours and times', async () => {
+    const { widgetSnapshot } = await import('./widget');
+    core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27' });
+    core.addTask({ title: 'دویدن', categoryId: 'sport', due: '2026-09-28', time: '06:30' });
+    core.addTask({ title: 'مرور', categoryId: 'study', due: '2026-09-28' });
+    const done = core.addTask({ title: 'انجام‌شده', due: '2026-09-28' });
+    core.setDone(done.id, true);
+    core.addTask({ title: 'بی‌تاریخ' });
+    core.addTask({ title: 'فردا', due: '2026-09-29' });
+    const s = widgetSnapshot(core);
+    expect(s.title).toBe('دوشنبه، ۶ میزان');
+    expect(s.day).toBe('2026-09-28');
+    expect(s.rtl).toBe(true);
+    expect(s.items.map((i) => i.title)).toEqual(['دیروز', 'دویدن', 'مرور', 'بی‌تاریخ']);
+    expect(s.items[0]).toMatchObject({ overdue: true, color: '#C06A00' });
+    expect(s.items[1]).toMatchObject({ time: '۶:۳۰ صبح', color: '#23875A', overdue: false });
+    expect(s.summary).toBe('۱ از ۴ انجام شد');
+    expect(s.progress).toBe(25);
+    expect(s.tomorrow).toBe('فردا: ۱ کار');
+    expect(s.more).toBe('');
+  });
+
+  it('shows at most six tasks and counts the rest', async () => {
+    const { widgetSnapshot } = await import('./widget');
+    for (let i = 1; i <= 9; i++) core.addTask({ title: `کار ${i}`, due: '2026-09-28' });
+    const s = widgetSnapshot(core);
+    expect(s.items).toHaveLength(6);
+    expect(s.more).toBe('+۳ کار دیگر');
+  });
+
+  it('speaks English when the app does', async () => {
+    const { widgetSnapshot } = await import('./widget');
+    core.updateSettings({ language: 'en' });
+    core.addTask({ title: 'Run', due: '2026-09-28', time: '18:30' });
+    const s = widgetSnapshot(core);
+    expect(s).toMatchObject({ rtl: false, title: 'Monday, September 28', summary: '0 of 1 done', tomorrow: 'Tomorrow: 0 tasks' });
+    expect(s.items[0].time).toBe('6:30 PM');
+  });
+
+  it('has a calm message on a day with no tasks', async () => {
+    const { widgetSnapshot } = await import('./widget');
+    expect(widgetSnapshot(core)).toMatchObject({ summary: 'امروز کاری ندارید', items: [], progress: 0 });
+  });
+});

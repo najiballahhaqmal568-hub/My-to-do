@@ -4,4 +4,6 @@
     <string name="title_activity_main">کارهای من</string>
     <string name="package_name">app.mytodo.personal</string>
     <string name="custom_url_scheme">app.mytodo.personal</string>
+    <string name="widget_name">کارهای امروز</string>
+    <string name="widget_description">کارهای امروز و پیشرفت شما، روی صفحهٔ اصلی گوشی</string>
 </resources>
