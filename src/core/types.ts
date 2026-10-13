@@ -40,6 +40,8 @@ export interface Task {
   createdAt: string;
   /** For a completed repeating occurrence: the id of the next occurrence it created. */
   spawnedId?: string | null;
+  /** Set when the user pressed «بعداً» on a reminder: the moment it should ring again. */
+  snoozedUntil?: string | null;
 }
 
 export type CategoryColor = 'green' | 'orange' | 'indigo' | 'rose' | 'teal' | 'violet' | 'amber' | 'sky';
@@ -99,6 +101,8 @@ export interface PlannedNotification {
   body: string;
   /** Where tapping the notification leads: `tomorrow` or `task:<id>`. */
   link: string;
+  /** Show «done» and «later» buttons on the notification. */
+  actions?: boolean;
 }
 
 export interface Clock {

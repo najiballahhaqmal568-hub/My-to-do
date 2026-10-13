@@ -2,14 +2,20 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { PlannedNotification } from '../core/types';
 
+export interface ActionLabels {
+  done: string;
+  later: string;
+}
+
 export interface NotificationAdapter {
   /** Replaces every scheduled notification with the plan. */
-  apply(plan: PlannedNotification[]): Promise<void>;
+  apply(plan: PlannedNotification[], labels: ActionLabels): Promise<void>;
   /** Asks for notification permission (and, the first time, exact alarms). Returns whether notifications may show. */
   ensurePermission(askExact: boolean): Promise<boolean>;
   exactAllowed(): Promise<boolean>;
   openExactSettings(): Promise<void>;
-  onOpen(cb: (link: string) => void): void;
+  /** Called when a notification, or one of its buttons, is pressed. `action` is `tap`, `done` or `later`. */
+  onOpen(cb: (link: string, action: string) => void): void;
 }
 
 const CHANNEL = 'reminders';
@@ -18,6 +24,7 @@ class NativeNotifications implements NotificationAdapter {
   private queue: Promise<void> = Promise.resolve();
   private channelReady: Promise<void> | null = null;
   private lastPlan: PlannedNotification[] = [];
+  private lastLabels: ActionLabels = { done: 'Done', later: 'Later' };
 
   private channel() {
     this.channelReady ??= LocalNotifications.createChannel({
@@ -31,13 +38,17 @@ class NativeNotifications implements NotificationAdapter {
     return this.channelReady;
   }
 
-  apply(plan: PlannedNotification[]): Promise<void> {
+  apply(plan: PlannedNotification[], labels: ActionLabels): Promise<void> {
     this.lastPlan = plan;
+    this.lastLabels = labels;
     this.queue = this.queue
       .then(async () => {
         const perm = await LocalNotifications.checkPermissions();
         if (perm.display !== 'granted') return;
         await this.channel();
+        await LocalNotifications.registerActionTypes({
+          types: [{ id: 'task', actions: [{ id: 'done', title: labels.done }, { id: 'later', title: labels.later }] }],
+        });
         const pending = await LocalNotifications.getPending();
         if (pending.notifications.length) {
           await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
@@ -50,6 +61,7 @@ class NativeNotifications implements NotificationAdapter {
             body: p.body,
             largeBody: p.body,
             channelId: CHANNEL,
+            actionTypeId: p.actions ? 'task' : undefined,
             smallIcon: 'ic_stat_icon',
             iconColor: '#1E6A51',
             schedule: { at: p.at, allowWhileIdle: true },
@@ -67,7 +79,7 @@ class NativeNotifications implements NotificationAdapter {
     if (perm.display !== 'granted') return false;
     if (askExact && !(await this.exactAllowed())) await this.openExactSettings();
     // Anything planned before permission was granted was skipped; schedule it now.
-    await this.apply(this.lastPlan);
+    await this.apply(this.lastPlan, this.lastLabels);
     return true;
   }
 
@@ -87,10 +99,10 @@ class NativeNotifications implements NotificationAdapter {
     }
   }
 
-  onOpen(cb: (link: string) => void): void {
+  onOpen(cb: (link: string, action: string) => void): void {
     LocalNotifications.addListener('localNotificationActionPerformed', (e) => {
       const link = e.notification.extra?.link;
-      if (typeof link === 'string') cb(link);
+      if (typeof link === 'string') cb(link, e.actionId);
     });
   }
 }

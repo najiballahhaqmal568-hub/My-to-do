@@ -289,3 +289,24 @@ test('a backup is saved automatically once a day and on demand', async ({ page }
   await page.getByRole('switch', { name: 'پشتیبان خودکار روزانه' }).click();
   await expect(page.getByRole('switch', { name: 'پشتیبان خودکار روزانه' })).toHaveAttribute('aria-checked', 'false');
 });
+
+test('the done and later buttons on a reminder work', async ({ page }) => {
+  await open(page);
+  await addTask(page, 'قرص', { time: '18:00', reminder: 'سر وقت' });
+  await addTask(page, 'تلفون', { time: '19:00', reminder: 'سر وقت' });
+  const plan = () => page.evaluate(() => (window as unknown as { __notificationPlan?: { link: string; at: string; actions?: boolean }[] }).__notificationPlan ?? []);
+  const idOf = async (title: string) => (await row(page, title).getAttribute('data-task-id'))!;
+  await expect.poll(async () => (await plan()).filter((p) => p.actions).length).toBe(2);
+  const pill = await idOf('قرص');
+  const call = await idOf('تلفون');
+
+  await page.evaluate((id) => (window as unknown as { __notificationAction: (l: string, a: string) => void }).__notificationAction(`task:${id}`, 'done'), pill);
+  await expect(row(page, 'قرص')).toHaveClass(/swipe/);
+  await expect(page.getByText('۱ از ۲ انجام شد')).toBeAttached();
+
+  await page.evaluate((id) => (window as unknown as { __notificationAction: (l: string, a: string) => void }).__notificationAction(`task:${id}`, 'later'), call);
+  await expect(row(page, 'تلفون')).toBeVisible();
+  await expect
+    .poll(async () => (await plan()).filter((p) => p.link === `task:${call}`).map((p) => p.at))
+    .toContain(new Date('2026-09-28T09:15:00+04:30').toISOString());
+});

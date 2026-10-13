@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom';
 import { addDays } from '../core/dates';
 import type { TaskCore } from '../core/core';
 import { MESSAGES } from '../i18n';
-import { hapticSuccess, hapticTap, onBackButton, onResume } from '../platform/device';
+import { hapticSuccess, hapticTap, isNative, minimizeApp, onBackButton, onResume } from '../platform/device';
 import { backupName, saveBackup } from '../platform/backup';
 import { notifications } from '../platform/notifications';
 import { CategoryEditor } from './components/CategoryEditor';
@@ -79,9 +79,9 @@ export function App({ core }: { core: TaskCore }) {
 
   // Every change to the data re-plans the scheduled notifications.
   useEffect(() => {
-    const id = window.setTimeout(() => notifications.apply(core.notificationPlan()), 250);
+    const id = window.setTimeout(() => notifications.apply(core.notificationPlan(), { done: t.actionDone, later: t.actionLater }), 250);
     return () => window.clearTimeout(id);
-  }, [core, version, resumes]);
+  }, [core, version, resumes, t]);
 
   const transition = useCallback(
     (fn: () => void) => {
@@ -143,7 +143,16 @@ export function App({ core }: { core: TaskCore }) {
   );
 
   const handleLink = useCallback(
-    (link: string) => {
+    (link: string, action = 'tap') => {
+      // The buttons on a reminder: mark the task done, or ring again in 15 minutes, then go back to what you were doing.
+      if (link.startsWith('task:') && (action === 'done' || action === 'later') && core.task(link.slice(5))) {
+        if (action === 'done') {
+          core.setDone(link.slice(5), true);
+          hapticSuccess();
+        } else core.snoozeReminder(link.slice(5), 15);
+        minimizeApp();
+        return;
+      }
       setEditor(null);
       if (link === 'tomorrow') {
         setStack([{ name: 'dashboard' }]);
@@ -168,7 +177,9 @@ export function App({ core }: { core: TaskCore }) {
   const linkRef = useRef(handleLink);
   linkRef.current = handleLink;
   useEffect(() => {
-    notifications.onOpen((l) => linkRef.current(l));
+    notifications.onOpen((l, action) => linkRef.current(l, action));
+    // End-to-end tests press notification buttons through this in the browser.
+    if (!isNative) (window as unknown as { __notificationAction: (link: string, action: string) => void }).__notificationAction = (l, a) => linkRef.current(l, a);
     // The bedtime summary is on by default, so ask for notification permission on first launch.
     // Exact alarms are asked for later, with the first task reminder.
     if (core.settings.bedtimeEnabled) notifications.ensurePermission(false);
