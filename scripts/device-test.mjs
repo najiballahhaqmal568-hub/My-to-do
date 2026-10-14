@@ -182,6 +182,7 @@ const webViewTop = () => {
 const screenPoint = async (locator) => {
   const origin = webViewTop();
   const p = await locator.evaluate((el) => {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const r = el.getBoundingClientRect();
     return { x: (r.left + r.width / 2) * devicePixelRatio, y: (r.top + r.height / 2) * devicePixelRatio };
   });
