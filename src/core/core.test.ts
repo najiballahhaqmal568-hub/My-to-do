@@ -651,6 +651,66 @@ describe('manual order', () => {
   });
 });
 
+describe('list orders', () => {
+  const order = (id: string | null) => titles(core.list(id).open);
+  const fill = () => {
+    core.addTask({ title: 'ب نان', categoryId: 'shop', due: '2026-09-28', time: '09:00', priority: 'low' });
+    core.addTask({ title: 'الف شیر', categoryId: 'shop', due: '2026-09-28', time: '18:00', priority: 'high' });
+    core.addTask({ title: 'ج چای', categoryId: 'shop', due: '2026-09-28', time: '12:00' });
+  };
+
+  it('arranges a list by time, newest, priority or title, and remembers it per list', () => {
+    fill();
+    expect(core.listOrder('shop')).toBe('time');
+    expect(order('shop')).toEqual(['ب نان', 'ج چای', 'الف شیر']);
+    core.setListOrder('shop', 'newest');
+    expect(order('shop')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
+    core.setListOrder('shop', 'priority');
+    expect(order('shop')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
+    core.setListOrder('shop', 'title');
+    expect(order('shop')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
+    expect(core.listOrder('sport')).toBe('time');
+  });
+
+  it('starts manual order from the order you see', () => {
+    fill();
+    core.setListOrder('shop', 'priority');
+    core.setListOrder('shop', 'manual');
+    expect(core.isManual('shop')).toBe(true);
+    expect(order('shop')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
+  });
+
+  it('arranges the dashboard too, keeping overdue tasks in their own group', () => {
+    fill();
+    core.addTask({ title: 'دیروزی', due: '2026-09-27', priority: 'low' });
+    core.setDashboardOrder('priority');
+    expect(core.dashboardOrder()).toBe('priority');
+    expect(titles(core.dashboard().overdue)).toEqual(['دیروزی']);
+    expect(titles(core.dashboard().tasks)).toEqual(['الف شیر', 'ب نان', 'ج چای']);
+    // The category list keeps its own order.
+    expect(order('shop')).toEqual(['ب نان', 'ج چای', 'الف شیر']);
+  });
+
+  it('puts completed tasks last whatever the order', () => {
+    fill();
+    const first = core.dashboard().tasks.find((t) => t.title === 'الف شیر')!;
+    core.setDone(first.id, true);
+    core.setDashboardOrder('title');
+    expect(titles(core.dashboard().tasks)).toEqual(['ب نان', 'ج چای', 'الف شیر']);
+  });
+
+  it('keeps lists arranged by hand in data saved before list orders existed', async () => {
+    core.addTask({ title: 'یک', categoryId: 'shop' });
+    const saved = JSON.parse(JSON.stringify(storage.saved));
+    delete saved.settings.listOrders;
+    saved.settings.manualLists = ['shop'];
+    const reopened = await TaskCore.open({ clock, storage: new MemoryStorage(saved) });
+    expect(reopened.isManual('shop')).toBe(true);
+    expect(reopened.listOrder('sport')).toBe('time');
+    expect('manualLists' in reopened.settings).toBe(false);
+  });
+});
+
 describe('history and stats', () => {
   const day = (iso: string, h = 12) => new Date(`${iso}T${String(h).padStart(2, '0')}:00:00+04:30`);
   const finish = (title: string, categoryId: string | null, on: string) => {

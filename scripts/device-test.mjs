@@ -182,6 +182,7 @@ const webViewTop = () => {
 const screenPoint = async (locator) => {
   const origin = webViewTop();
   const p = await locator.evaluate((el) => {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     const r = el.getBoundingClientRect();
     return { x: (r.left + r.width / 2) * devicePixelRatio, y: (r.top + r.height / 2) * devicePixelRatio };
   });
@@ -201,7 +202,7 @@ for (const title of ['اول', 'دوم', 'سوم']) {
 const order = () => page.getByTestId('list-screen').getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
 check(JSON.stringify(await order()) === JSON.stringify(['سوم', 'دوم', 'اول']), `a new task is listed first (${JSON.stringify(await order())})`);
 // A finger tap at a computed position first, to prove the coordinates are right.
-const modeButton = page.getByTestId('order-mode');
+const modeButton = page.getByTestId('order-manual');
 const modePoint = await screenPoint(modeButton);
 sh(`adb shell input tap ${modePoint.x} ${modePoint.y}`);
 await sleep(1500);

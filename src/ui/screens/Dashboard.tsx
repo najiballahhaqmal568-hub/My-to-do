@@ -6,6 +6,8 @@ import { SPRING, TaskRow } from '../components/TaskRow';
 import { useApp } from '../context';
 import { Icon } from '../icons';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { OrderBar } from '../components/OrderBar';
+import type { ListOrder } from '../../core/types';
 
 export function Dashboard() {
   const { core, lang, t, tick, navigate, openEditor } = useApp();
@@ -97,6 +99,9 @@ export function Dashboard() {
         {t.todaysTasks}
         <span>{t.taskCount(list.length)}</span>
       </h2>
+      {list.length + d.undated.length > 1 && (
+        <OrderBar value={core.dashboardOrder()} options={['time', 'newest', 'priority', 'title']} onChange={(o) => core.setDashboardOrder(o as Exclude<ListOrder, 'manual'>)} />
+      )}
       {list.length === 0 ? (
         <div className="empty">{t.nothingToday}</div>
       ) : (

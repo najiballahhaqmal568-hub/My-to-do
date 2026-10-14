@@ -351,7 +351,7 @@ test('a list can be arranged by hand with the arrow keys and by dragging', async
   const titles = () => page.getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
   expect(await titles()).toEqual(['سوم', 'دوم', 'اول']);
 
-  await page.getByTestId('order-mode').click();
+  await page.getByTestId('order-manual').click();
   await expect(page.getByTestId('manual-list')).toBeVisible();
   expect(await titles()).toEqual(['سوم', 'دوم', 'اول']);
 
@@ -380,6 +380,38 @@ test('a list can be arranged by hand with the arrow keys and by dragging', async
   await expect.poll(titles).toEqual(['چهارم', 'دوم', 'سوم', 'اول']);
 
   // Back to automatic order: the newest first again.
-  await page.getByTestId('order-mode').click();
+  await page.getByTestId('order-time').click();
   await expect.poll(titles).toEqual(['چهارم', 'سوم', 'دوم', 'اول']);
+});
+
+test('lists and the dashboard can be sorted by newest, priority or name', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('cat-card-دوکان').click();
+  await addTask(page, 'ب نان');
+  await addTask(page, 'الف شیر');
+  await addTask(page, 'ج چای', { priority: 'بالا' });
+  const titles = (scope: string) => page.getByTestId(scope).getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
+  await expect(page.getByTestId('order-time')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('order-title').click();
+  await expect.poll(() => titles('list-screen')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
+  await expect(page.getByTestId('order-title')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByTestId('order-newest').click();
+  await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
+  // «ج چای» is important, so priority order puts it first.
+  await page.getByTestId('order-priority').click();
+  await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
+
+  // The choice is remembered for this list after leaving it.
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByTestId('cat-card-دوکان').click();
+  await expect(page.getByTestId('order-priority')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
+
+  // The dashboard has its own choice, without manual order since it mixes categories.
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('order-manual')).toHaveCount(0);
+  await page.getByTestId('dashboard').getByTestId('order-title').click();
+  await expect.poll(() => titles('dashboard')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
 });

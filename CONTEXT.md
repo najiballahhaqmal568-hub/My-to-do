@@ -4,7 +4,7 @@
 - **Category**: a named, coloured group of tasks with an emoji (ورزش، دوکان، مطالعه are created on first launch).
 - **Inbox**: where tasks without a category live. It is not a category.
 - **Subtask**: a one-level checklist item inside a task.
-- **Order**: lists show overdue tasks first, then by due date, due time (untimed last) and priority. Tasks that tie on all of these list the most recently added first, so a new task is never at the end.
+- **Order** (چیدمان): each list, and the dashboard, picks how it is arranged: by time (the default), newest, priority, A–Z, or by hand (manual; not on the dashboard, which mixes categories). Completed tasks always go last, and ties fall back to the time order. The time order shows overdue tasks first, then by due date, due time (untimed last) and priority. Tasks that tie on all of these list the most recently added first, so a new task is never at the end.
 - **Overdue**: an open task whose due date is before today.
 - **Repeating task**: a task with a repeat rule. Only one **live occurrence** exists at a time; completing it creates the next one from its due date.
 - **Projected occurrence**: a future run of a repeating task, computed for views and notifications but never stored.
