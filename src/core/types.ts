@@ -68,9 +68,15 @@ export interface Settings {
   lastBackup: string | null;
   /** A reminder every Friday to move a backup somewhere safe. */
   backupReminder: boolean;
-  /** Lists the user arranged by hand: category ids, or `_inbox`. */
-  manualLists: string[];
+  /** How each list is arranged, by category id, `_inbox` or `_today` (the dashboard). Missing means `time`. */
+  listOrders: Record<string, ListOrder>;
 }
+
+/**
+ * How a list is arranged: by date and time, newest first, by priority, alphabetically, or by hand.
+ * Completed tasks always go last.
+ */
+export type ListOrder = 'time' | 'newest' | 'priority' | 'title' | 'manual';
 
 export interface Data {
   version: 1;

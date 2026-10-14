@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, Reorder, useDragControls } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task } from '../../core/types';
+import { OrderBar } from '../components/OrderBar';
 import { TaskRow } from '../components/TaskRow';
 import { useApp } from '../context';
 import { Icon } from '../icons';
@@ -19,13 +20,8 @@ export function ListScreen({ categoryId }: { categoryId: string | null }) {
         </button>
         <h1>{cat ? `${cat.emoji} ${cat.name}` : t.inbox}</h1>
       </header>
-      <div className="mode-row">
-        <button className="seg-btn" data-testid="order-mode" aria-pressed={manual} onClick={() => core.setManual(categoryId, !manual)}>
-          <Icon name="grip" small />
-          {manual ? t.orderManual : t.orderAuto}
-        </button>
-        {manual && <span className="muted mode-hint">{t.orderHint}</span>}
-      </div>
+      <OrderBar value={core.listOrder(categoryId)} options={['time', 'newest', 'priority', 'title', 'manual']} onChange={(o) => core.setListOrder(categoryId, o)} />
+      {manual && <p className="muted mode-hint">{t.orderHint}</p>}
       {view.open.length === 0 ? (
         <div className="empty">{t.nothingHere}</div>
       ) : manual ? (

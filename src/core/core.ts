@@ -6,6 +6,7 @@ import type {
   CategoryColor,
   Clock,
   Data,
+  ListOrder,
   Occurrence,
   PlannedNotification,
   Priority,
@@ -92,7 +93,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoBackup: true,
   lastBackup: null,
   backupReminder: true,
-  manualLists: [],
+  listOrders: {},
 };
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, none: 3 };
 const REMINDER_MINUTES = { atTime: 0, '15m': 15, '1h': 60, '1d': 1440 } as const;
@@ -115,6 +116,7 @@ export function seedData(): Data {
 }
 
 const listKey = (categoryId: string | null) => categoryId ?? '_inbox';
+const TODAY_KEY = '_today';
 
 /** A stable positive 31-bit id for a notification key (FNV-1a). */
 export function notificationId(key: string): number {
@@ -489,14 +491,34 @@ export class TaskCore {
     return new Map(this.data.tasks.map((t, i) => [t.id, i]));
   }
 
+  /**
+   * Sorts by one of the list orders. Ties, and the `time` order itself, follow `sort`; completed tasks go
+   * last. `manual` is handled by the list itself, so here it means `time`.
+   */
+  sortBy(tasks: Task[], order: ListOrder, today = this.today()): Task[] {
+    if (order === 'time' || order === 'manual') return this.sort(tasks, today);
+    const base = new Map(this.sort(tasks, today).map((t, i) => [t.id, i]));
+    const added = this.addedOrder();
+    const collator = new Intl.Collator(this.data.settings.language, { sensitivity: 'base', numeric: true });
+    return [...tasks].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      let d = 0;
+      if (order === 'newest') d = (added.get(b.id) ?? 0) - (added.get(a.id) ?? 0);
+      else if (order === 'priority') d = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      else d = collator.compare(a.title, b.title);
+      return d || base.get(a.id)! - base.get(b.id)!;
+    });
+  }
+
   dashboard(): Dashboard {
     const today = this.today();
     const tomorrow = addDays(today, 1);
-    const overdue = this.sort(this.data.tasks.filter((t) => this.isOverdue(t, today)), today);
+    const order = this.dashboardOrder();
+    const overdue = this.sortBy(this.data.tasks.filter((t) => this.isOverdue(t, today)), order, today);
     const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today && !!t.due && t.due < today;
-    const tasks = this.sort(this.data.tasks.filter((t) => t.due === today || doneToday(t)), today);
+    const tasks = this.sortBy(this.data.tasks.filter((t) => t.due === today || doneToday(t)), order, today);
     const all = [...overdue, ...tasks];
-    const undated = this.sort(this.data.tasks.filter((t) => !t.due && !t.done), today);
+    const undated = this.sortBy(this.data.tasks.filter((t) => !t.due && !t.done), order, today);
     const ids: (string | null)[] = [...this.categories().map((c) => c.id), null];
     const categories = ids.map((categoryId) => {
       const mine = [...all, ...undated].filter((t) => t.categoryId === categoryId);
@@ -552,28 +574,49 @@ export class TaskCore {
     const mine = this.data.tasks.filter((t) => t.categoryId === categoryId);
     const open = mine.filter((t) => !t.done);
     return {
-      open: this.isManual(categoryId) ? this.manualSort(open) : this.sort(open),
+      open: this.isManual(categoryId) ? this.manualSort(open) : this.sortBy(open, this.listOrder(categoryId)),
       done: mine.filter((t) => t.done).sort((a, b) => ((a.completedAt ?? '') < (b.completedAt ?? '') ? 1 : -1)),
     };
   }
 
-  /* ---------------- manual order ---------------- */
+  /* ---------------- list order ---------------- */
 
-  isManual(categoryId: string | null): boolean {
-    return this.data.settings.manualLists.includes(listKey(categoryId));
+  /** How a category's list (or the Inbox's, for null) is arranged. */
+  listOrder(categoryId: string | null): ListOrder {
+    return this.data.settings.listOrders[listKey(categoryId)] ?? 'time';
   }
 
-  /** Switches a list between automatic and manual order. Turning manual on keeps the order you see now. */
-  setManual(categoryId: string | null, on: boolean): void {
-    if (on === this.isManual(categoryId)) return;
-    const key = listKey(categoryId);
+  /** Arranges a list. Switching to manual keeps the order you see now, so you start from there. */
+  setListOrder(categoryId: string | null, order: ListOrder): void {
+    const was = this.listOrder(categoryId);
+    if (order === was) return;
     let tasks = this.data.tasks;
-    if (on) {
-      const frozen = new Map(this.sort(tasks.filter((t) => t.categoryId === categoryId && !t.done)).map((t, i) => [t.id, i]));
+    if (order === 'manual') {
+      const shown = this.sortBy(tasks.filter((t) => t.categoryId === categoryId && !t.done), was);
+      const frozen = new Map(shown.map((t, i) => [t.id, i]));
       tasks = tasks.map((t) => (frozen.has(t.id) ? { ...t, pos: frozen.get(t.id)! } : t));
     }
-    const manualLists = on ? [...this.data.settings.manualLists, key] : this.data.settings.manualLists.filter((k) => k !== key);
-    this.commit({ ...this.data, tasks, settings: { ...this.data.settings, manualLists } });
+    this.commit({ ...this.data, tasks, settings: { ...this.data.settings, listOrders: { ...this.data.settings.listOrders, [listKey(categoryId)]: order } } });
+  }
+
+  /** How the dashboard's lists are arranged; they mix categories, so there is no manual order. */
+  dashboardOrder(): ListOrder {
+    const order = this.data.settings.listOrders[TODAY_KEY] ?? 'time';
+    return order === 'manual' ? 'time' : order;
+  }
+
+  setDashboardOrder(order: Exclude<ListOrder, 'manual'>): void {
+    if (order === this.dashboardOrder()) return;
+    this.updateSettings({ listOrders: { ...this.data.settings.listOrders, [TODAY_KEY]: order } });
+  }
+
+  isManual(categoryId: string | null): boolean {
+    return this.listOrder(categoryId) === 'manual';
+  }
+
+  /** Switches a list between manual order and the automatic order by date and time. */
+  setManual(categoryId: string | null, on: boolean): void {
+    if (on !== this.isManual(categoryId)) this.setListOrder(categoryId, on ? 'manual' : 'time');
   }
 
   /** Puts the given tasks of a manual list in this order. */
@@ -723,6 +766,13 @@ function historyFromTasks(tasks: Task[]): Data['history'] {
   return history;
 }
 
+/** Fills in settings added since the data was saved. Lists arranged by hand before list orders existed stay manual. */
+function settingsWithDefaults(saved: Partial<Settings> & { manualLists?: string[] } = {}): Settings {
+  const { manualLists, ...rest } = saved;
+  const listOrders = { ...Object.fromEntries((manualLists ?? []).map((k) => [k, 'manual' as const])), ...(rest.listOrders ?? {}) };
+  return { ...DEFAULT_SETTINGS, ...rest, listOrders };
+}
+
 function withDefaults(d: Data): Data {
   const tasks = (d.tasks ?? []).map((t) => ({
       notes: '',
@@ -742,7 +792,7 @@ function withDefaults(d: Data): Data {
   return {
     version: 1,
     categories: d.categories ?? [],
-    settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
+    settings: settingsWithDefaults(d.settings),
     tasks,
     history: d.history ?? historyFromTasks(tasks),
   };
