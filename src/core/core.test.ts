@@ -651,6 +651,41 @@ describe('manual order', () => {
   });
 });
 
+describe('add to today', () => {
+  it('moves a task to today, keeps its time and repeat, and can be undone', () => {
+    const t = core.addTask({ title: 'خرید', categoryId: 'shop', due: '2026-10-05', time: '09:30', repeat: { kind: 'weekly' } });
+    const moved = core.addToToday(t.id);
+    expect(moved.due).toBe('2026-09-28');
+    expect(moved.time).toBe('09:30');
+    expect(moved.repeat?.kind).toBe('weekly');
+    expect(titles(core.dashboard().tasks)).toEqual(['خرید']);
+    expect(core.undo()).toBe('move');
+    expect(core.task(t.id)?.due).toBe('2026-10-05');
+    expect(core.dashboard().tasks).toEqual([]);
+  });
+
+  it('puts an undated task on today, and brings an overdue one forward', () => {
+    const a = core.addTask({ title: 'بدون تاریخ', categoryId: 'shop' });
+    const b = core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27' });
+    expect(titles(core.dashboard().undated)).toEqual(['بدون تاریخ']);
+    core.addToToday(a.id);
+    core.addToToday(b.id);
+    expect(core.dashboard().undated).toEqual([]);
+    expect(core.dashboard().overdue).toEqual([]);
+    expect(titles(core.dashboard().tasks).sort()).toEqual(['بدون تاریخ', 'دیروز']);
+  });
+
+  it('leaves a task already due today, and a completed task, alone', () => {
+    const a = core.addTask({ title: 'امروزی', due: '2026-09-28' });
+    const done = core.addTask({ title: 'تمام', due: '2026-09-20' });
+    core.setDone(done.id, true);
+    expect(core.addToToday(a.id).due).toBe('2026-09-28');
+    expect(core.canUndo()).toBe(true); // still the completion, not a move
+    expect(core.addToToday(done.id).due).toBe('2026-09-20');
+    expect(core.undo()).toBe('complete');
+  });
+});
+
 describe('list orders', () => {
   const order = (id: string | null) => titles(core.list(id).open);
   const fill = () => {

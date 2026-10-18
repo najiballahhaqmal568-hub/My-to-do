@@ -30,7 +30,7 @@ export function ListScreen({ categoryId }: { categoryId: string | null }) {
         <div className="list">
           <AnimatePresence initial={false}>
             {view.open.map((task) => (
-              <TaskRow key={task.id} task={task} showCategory={false} showDate />
+              <TaskRow key={task.id} task={task} showCategory={false} showDate todayButton />
             ))}
           </AnimatePresence>
         </div>
@@ -118,6 +118,7 @@ function ManualRow({ task, onDrop, onMove }: { task: Task; onDrop: () => void; o
         task={task}
         showCategory={false}
         showDate
+        todayButton
         plain
         handle={
           <button
