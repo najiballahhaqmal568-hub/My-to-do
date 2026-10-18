@@ -439,3 +439,32 @@ test('a task in a category can be added to today, and that can be undone', async
   await page.getByRole('button', { name: 'برگرداندن', exact: true }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
 });
+
+test('a category can be kept off the daily dashboard and its tasks brought to today one by one', async ({ page }) => {
+  await open(page);
+  await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
+  await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'ویرایش کتگوری' }).click();
+  const daily = page.getByRole('switch', { name: 'نمایش در کارهای روزانه' });
+  await expect(daily).toHaveAttribute('aria-checked', 'true');
+  await daily.click();
+  await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
+
+  // The card is gone from the dashboard, and a task added in the category starts without a date.
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
+  await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
+  await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'دوکان' }).first().click();
+  await addTask(page, 'سفارش قند');
+  await expect(page.getByTestId('list-screen').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(1);
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(0);
+  await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
+
+  // «+ امروز» brings it onto the dashboard, and the category card with it.
+  await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
+  await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'دوکان' }).first().click();
+  await page.getByTestId('list-screen').getByRole('button', { name: 'افزودن به امروز: سفارش قند' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(1);
+  await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(1);
+});

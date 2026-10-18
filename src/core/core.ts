@@ -392,16 +392,16 @@ export class TaskCore {
 
   /* ---------------- categories ---------------- */
 
-  addCategory(input: { name: string; emoji: string; color: CategoryColor }): Category {
+  addCategory(input: { name: string; emoji: string; color: CategoryColor; daily?: boolean }): Category {
     const name = input.name.trim();
     if (!name) throw new CoreError('name-required');
     const order = Math.max(-1, ...this.data.categories.map((c) => c.order)) + 1;
-    const cat: Category = { id: newId(), name, emoji: input.emoji.trim() || '📌', color: input.color, order };
+    const cat: Category = { id: newId(), name, emoji: input.emoji.trim() || '📌', color: input.color, order, ...(input.daily === false ? { daily: false } : {}) };
     this.commit({ ...this.data, categories: [...this.data.categories, cat] });
     return cat;
   }
 
-  updateCategory(id: string, patch: Partial<Pick<Category, 'name' | 'emoji' | 'color'>>): void {
+  updateCategory(id: string, patch: Partial<Pick<Category, 'name' | 'emoji' | 'color' | 'daily'>>): void {
     if (patch.name !== undefined && !patch.name.trim()) throw new CoreError('name-required');
     this.commit({
       ...this.data,
@@ -473,6 +473,11 @@ export class TaskCore {
     return [...this.data.categories].sort((a, b) => a.order - b.order);
   }
 
+  /** Whether a category's tasks belong on the daily dashboard. The Inbox always does. */
+  isDaily(categoryId: string | null): boolean {
+    return this.category(categoryId)?.daily !== false;
+  }
+
   category(id: string | null): Category | undefined {
     return id ? this.data.categories.find((c) => c.id === id) : undefined;
   }
@@ -534,7 +539,7 @@ export class TaskCore {
     const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today && !!t.due && t.due < today;
     const tasks = this.sortBy(this.data.tasks.filter((t) => t.due === today || doneToday(t)), order, today);
     const all = [...overdue, ...tasks];
-    const undated = this.sortBy(this.data.tasks.filter((t) => !t.due && !t.done), order, today);
+    const undated = this.sortBy(this.data.tasks.filter((t) => !t.due && !t.done && this.isDaily(t.categoryId)), order, today);
     const ids: (string | null)[] = [...this.categories().map((c) => c.id), null];
     const categories = ids.map((categoryId) => {
       const mine = [...all, ...undated].filter((t) => t.categoryId === categoryId);

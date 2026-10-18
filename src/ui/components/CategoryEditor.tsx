@@ -11,12 +11,13 @@ export function CategoryEditor({ categoryId, onClose }: { categoryId: string | n
   const [name, setName] = useState(existing?.name ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '📌');
   const [color, setColor] = useState<CategoryColor>(existing?.color ?? 'teal');
+  const [daily, setDaily] = useState(existing?.daily !== false);
   const [error, setError] = useState(false);
 
   function save() {
     if (!name.trim()) return setError(true);
-    if (existing) core.updateCategory(existing.id, { name, emoji, color });
-    else core.addCategory({ name, emoji, color });
+    if (existing) core.updateCategory(existing.id, { name, emoji, color, daily });
+    else core.addCategory({ name, emoji, color, daily });
     onClose();
   }
 
@@ -73,6 +74,13 @@ export function CategoryEditor({ categoryId, onClose }: { categoryId: string | n
             <button type="button" key={c} className={`c-${c}`} aria-label={c} aria-pressed={color === c} onClick={() => setColor(c)} />
           ))}
         </div>
+      </div>
+      <div className="card-row" style={{ borderBottom: 0, marginBottom: 6 }}>
+        <div className="grow">
+          <label htmlFor="cat-daily">{t.categoryDaily}</label>
+          <small>{t.categoryDailyHint}</small>
+        </div>
+        <button type="button" id="cat-daily" className="switch" role="switch" aria-checked={daily} onClick={() => setDaily(!daily)} />
       </div>
       <div className="actions">
         <button type="submit" className="btn primary">

@@ -220,7 +220,8 @@ export function App({ core }: { core: TaskCore }) {
     const today = core.today();
     // New tasks default to today so they show up among today's tasks; the date can be changed or cleared.
     if (route.name === 'upcoming') return { defaults: { due: addDays(today, 1) } };
-    if (route.name === 'list') return { defaults: { due: today, categoryId: route.categoryId } };
+    // A category kept off the daily dashboard starts its tasks undated; «+ امروز» brings one to today.
+    if (route.name === 'list') return { defaults: { due: core.isDaily(route.categoryId) ? today : null, categoryId: route.categoryId } };
     return { defaults: { due: today } };
   };
 
