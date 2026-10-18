@@ -55,6 +55,11 @@ export interface Category {
   color: CategoryColor;
   emoji: string;
   order: number;
+  /**
+   * Whether the category belongs on the daily dashboard. Missing means yes. When off, its undated tasks and its
+   * card stay off the dashboard; its tasks show there only once they are given today's date.
+   */
+  daily?: boolean;
 }
 
 export interface Settings {

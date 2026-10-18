@@ -11,3 +11,4 @@
 - **Bedtime summary**: the evening notification listing tomorrow's tasks.
 - **Notification plan**: the full list of notifications that should be scheduled right now, computed by the Task Core and applied by the Android adapter.
 - **Task Core**: the framework-free module holding all rules; the UI reads it through queries and changes it through commands.
+- **Daily category** (کتگوری روزانه): a category shown on the dashboard. A category can be switched off in its editor: its card and its undated tasks then stay off the dashboard, and new tasks in it start without a date. A task of such a category shows on the dashboard once it is given today's date (the «+ امروز» button), and the category's card appears with it.

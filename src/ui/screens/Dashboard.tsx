@@ -57,6 +57,8 @@ export function Dashboard() {
       <div className="cat-grid">
         {cats.map((c, i) => {
           const p = d.categories.find((x) => x.categoryId === c.id)!;
+          // A category kept off the daily list shows up only while it has something for today.
+          if (c.daily === false && p.total === 0) return null;
           return (
             <motion.button
               key={c.id}

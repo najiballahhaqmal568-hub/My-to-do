@@ -651,6 +651,36 @@ describe('manual order', () => {
   });
 });
 
+describe('categories kept off the daily dashboard', () => {
+  it('hides undated tasks of a non-daily category, but not tasks given today\'s date', () => {
+    core.updateCategory('shop', { daily: false });
+    expect(core.isDaily('shop')).toBe(false);
+    expect(core.isDaily('sport')).toBe(true);
+    expect(core.isDaily(null)).toBe(true);
+    const a = core.addTask({ title: 'فروشگاه', categoryId: 'shop' });
+    core.addTask({ title: 'ورزش', categoryId: 'sport' });
+    expect(titles(core.dashboard().undated)).toEqual(['ورزش']);
+    expect(core.dashboard().categories.find((c) => c.categoryId === 'shop')).toMatchObject({ total: 0, left: 0 });
+    // Giving it today's date brings it onto the dashboard, with its category counted.
+    core.addToToday(a.id);
+    expect(titles(core.dashboard().tasks)).toEqual(['فروشگاه']);
+    expect(core.dashboard().categories.find((c) => c.categoryId === 'shop')).toMatchObject({ total: 1, left: 1 });
+    expect(core.list('shop').open).toHaveLength(1);
+  });
+
+  it('is on by default, can be switched back, and survives export and import', () => {
+    expect(core.category('shop')?.daily).toBeUndefined();
+    const made = core.addCategory({ name: 'خانه', emoji: '🏠', color: 'teal', daily: false });
+    expect(core.isDaily(made.id)).toBe(false);
+    expect(core.addCategory({ name: 'کار', emoji: '💼', color: 'green' }).daily).toBeUndefined();
+    const json = core.exportBackup();
+    core.updateCategory(made.id, { daily: true });
+    expect(core.isDaily(made.id)).toBe(true);
+    core.importBackup(json);
+    expect(core.isDaily(made.id)).toBe(false);
+  });
+});
+
 describe('add to today', () => {
   it('moves a task to today, keeps its time and repeat, and can be undone', () => {
     const t = core.addTask({ title: 'خرید', categoryId: 'shop', due: '2026-10-05', time: '09:30', repeat: { kind: 'weekly' } });
