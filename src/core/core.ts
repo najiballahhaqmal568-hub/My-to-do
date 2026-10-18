@@ -37,7 +37,7 @@ export class CoreError extends Error {
   }
 }
 
-type UndoEntry = { kind: 'delete'; task: Task; index: number } | { kind: 'complete'; before: Task };
+type UndoEntry = { kind: 'delete'; task: Task; index: number } | { kind: 'complete'; before: Task } | { kind: 'move'; before: Task };
 
 export interface ListView {
   open: Task[];
@@ -331,8 +331,21 @@ export class TaskCore {
     return this.lastUndo !== null;
   }
 
-  /** Reverses the most recent delete or completion. Returns what was undone. */
-  undo(): 'delete' | 'complete' | null {
+  /**
+   * Puts an open task on today's list: its due date becomes today. The time of day, repeat and everything
+   * else stay as they were. A task that is already due today is left alone. Can be undone.
+   */
+  addToToday(id: string): Task {
+    const old = this.find(id);
+    const today = this.today();
+    if (old.done || old.due === today) return old;
+    const moved = this.updateTask(id, { due: today });
+    this.lastUndo = { kind: 'move', before: old };
+    return moved;
+  }
+
+  /** Reverses the most recent delete, completion or move to today. Returns what was undone. */
+  undo(): 'delete' | 'complete' | 'move' | null {
     const u = this.lastUndo;
     if (!u) return null;
     this.lastUndo = null;
@@ -340,6 +353,9 @@ export class TaskCore {
       const tasks = [...this.data.tasks];
       tasks.splice(Math.min(u.index, tasks.length), 0, u.task);
       this.setTasks(tasks);
+    } else if (u.kind === 'move') {
+      if (!this.data.tasks.some((x) => x.id === u.before.id)) return null;
+      this.setTasks(this.replace(u.before));
     } else {
       const current = this.data.tasks.find((x) => x.id === u.before.id);
       if (!current) return null;

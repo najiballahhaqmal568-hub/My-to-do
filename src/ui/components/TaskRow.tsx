@@ -18,10 +18,12 @@ interface Props {
   handle?: ReactNode;
   /** No entrance, exit or layout animation: the parent (a reorder list) moves the row itself. */
   plain?: boolean;
+  /** Offer to put the task on today's list (or show that it is already there). */
+  todayButton?: boolean;
 }
 
-export function TaskRow({ task, showCategory = true, showDate = false, projected = false, handle, plain = false }: Props) {
-  const { core, lang, t, complete, openEditor, highlightId, reduceMotion } = useApp();
+export function TaskRow({ task, showCategory = true, showDate = false, projected = false, handle, plain = false, todayButton = false }: Props) {
+  const { core, lang, t, complete, openEditor, highlightId, reduceMotion, toast } = useApp();
   const x = useMotionValue(0);
   const bgOpacity = useTransform(x, [-110, -12, 0, 12, 110], [1, 0.15, 0, 0.15, 1]);
   const checkRef = useRef<HTMLButtonElement>(null);
@@ -125,6 +127,25 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
             )}
           </div>
         </button>
+        {todayButton && !projected && !task.done && (task.due === core.today() ? (
+          <span className="today-tag" data-testid="in-today">
+            <Icon name="check" small />
+            {t.inToday}
+          </span>
+        ) : (
+          <button
+            className="today-btn"
+            data-testid="add-to-today"
+            aria-label={`${t.addToToday}: ${task.title}`}
+            onClick={() => {
+              core.addToToday(task.id);
+              toast(t.addedToToday, true);
+            }}
+          >
+            <Icon name="plus" small />
+            {t.inToday}
+          </button>
+        ))}
         {!task.done && task.priority !== 'none' && (
           <span className={`pri ${task.priority}`}>{task.priority === 'high' ? t.important : task.priority === 'medium' ? t.priorityMedium : t.priorityLow}</span>
         )}

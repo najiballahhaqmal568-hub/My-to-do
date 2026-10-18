@@ -415,3 +415,27 @@ test('lists and the dashboard can be sorted by newest, priority or name', async 
   await page.getByTestId('dashboard').getByTestId('order-title').click();
   await expect.poll(() => titles('dashboard')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
 });
+
+test('a task in a category can be added to today, and that can be undone', async ({ page }) => {
+  await open(page);
+  // From the Upcoming screen a new task is due tomorrow.
+  await page.getByRole('navigation').getByRole('button', { name: 'آینده' }).click();
+  await addTask(page, 'نان فردا', { category: 'دوکان' });
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
+
+  await page.getByTestId('cat-card-دوکان').click();
+  const list = page.getByTestId('list-screen');
+  await expect(list.getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(1);
+  await list.getByRole('button', { name: 'افزودن به امروز: نان فردا' }).click();
+  await expect(page.getByText('به کارهای امروز اضافه شد')).toBeVisible();
+  await expect(list.getByTestId('in-today')).toHaveCount(1);
+  await expect(list.getByRole('button', { name: /افزودن به امروز/ })).toHaveCount(0);
+
+  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(1);
+
+  // Undo puts it back on tomorrow.
+  await page.getByRole('button', { name: 'برگرداندن', exact: true }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
+});
