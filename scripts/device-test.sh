@@ -22,7 +22,8 @@ for name in 1-dashboard 2-editor 5-notification 8-dark; do
   else python3 -c "import sys" && echo "[img] no image converter on this runner" && break; fi
   base64 -w 4000 "/tmp/$name.jpg" | sed "s/^/[img $name] /"
 done
-if grep -q "FATAL EXCEPTION" device-shots/logcat.txt; then
+# Only the app's own crashes count: tools such as uiautomator can crash on the emulator too.
+if grep -A 2 "FATAL EXCEPTION" device-shots/logcat.txt | grep -q "Process: $PKG"; then
   echo "[device] FAIL: the app crashed"
   grep -A 25 "FATAL EXCEPTION" device-shots/logcat.txt | head -60
   exit 1
