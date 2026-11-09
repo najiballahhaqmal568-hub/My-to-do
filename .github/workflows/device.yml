@@ -6,7 +6,7 @@ on:
 
 jobs:
   emulator:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
   rotation:
     # Moving to a private signing key must not strand phones that already have the app: an update signed with
     # the new key and a rotation lineage has to install over a build signed with the public key.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
