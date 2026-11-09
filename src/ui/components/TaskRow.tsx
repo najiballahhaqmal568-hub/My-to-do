@@ -127,11 +127,19 @@ export function TaskRow({ task, showCategory = true, showDate = false, projected
             )}
           </div>
         </button>
-        {todayButton && !projected && !task.done && (task.due === core.today() ? (
-          <span className="today-tag" data-testid="in-today">
+        {todayButton && !projected && !task.done && (task.today ? (
+          <button
+            className="today-tag"
+            data-testid="in-today"
+            aria-label={`${t.removeFromToday}: ${task.title}`}
+            onClick={() => {
+              core.removeFromToday(task.id);
+              toast(t.removedFromToday);
+            }}
+          >
             <Icon name="check" small />
             {t.inToday}
-          </span>
+          </button>
         ) : (
           <button
             className="today-btn"

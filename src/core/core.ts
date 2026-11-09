@@ -37,7 +37,7 @@ export class CoreError extends Error {
   }
 }
 
-type UndoEntry = { kind: 'delete'; task: Task; index: number } | { kind: 'complete'; before: Task } | { kind: 'move'; before: Task };
+type UndoEntry = { kind: 'delete'; task: Task; index: number } | { kind: 'complete'; before: Task } | { kind: 'move'; before: Task[] };
 
 export interface ListView {
   open: Task[];
@@ -54,14 +54,11 @@ export interface Dashboard {
   today: ISODate;
   tomorrow: ISODate;
   progress: { done: number; total: number };
-  overdue: Task[];
-  /** Today's tasks: open ones first, then the ones completed today. */
+  /** The tasks the user put on Today, in the order chosen for Today (manual aside): open ones, then those completed today. */
   tasks: Task[];
-  /** Open tasks with no due date; they are not part of today's progress. */
-  undated: Task[];
-  /** What the Today list shows: overdue tasks and today's, in the order chosen for Today. Completed ones go last. */
+  /** What the Today list shows: `tasks`, or the user's own arrangement when Today is in manual order. */
   todayList: Task[];
-  /** Per category: today's and overdue tasks plus open undated ones. */
+  /** Per category: its tasks on Today. */
   categories: CategoryProgress[];
   tomorrowItems: Occurrence[];
 }
@@ -241,10 +238,11 @@ export class TaskCore {
       repeat,
       reminder: patch.reminder !== undefined ? patch.reminder : old.reminder,
       subtasks: patch.subtasks ?? old.subtasks,
+      today: patch.today,
     };
     let task = this.build({ ...old, snoozedUntil: null }, merged);
     if (task.categoryId !== old.categoryId && this.isManual(task.categoryId)) task = { ...task, pos: this.topPos(task.categoryId) };
-    if (task.due !== old.due) task = this.placedOnToday(task);
+    if (task.today && !old.today) task = this.placedOnToday(task);
     this.setTasks(this.replace(task));
     return task;
   }
@@ -279,6 +277,7 @@ export class TaskCore {
       repeat,
       reminder: time ? (input.reminder ?? null) : null,
       subtasks,
+      ...(input.today !== undefined ? { today: input.today } : {}),
     } as Task;
   }
 
@@ -298,6 +297,9 @@ export class TaskCore {
           completedAt: null,
           createdAt: this.now().toISOString(),
           spawnedId: null,
+          // The next run is for a later day: it joins Today only when the user puts it there.
+          today: false,
+          todayPos: null,
           snoozedUntil: null,
           subtasks: task.subtasks.map((s) => ({ ...s, id: newId(), done: false })),
         };
@@ -335,17 +337,39 @@ export class TaskCore {
     return this.lastUndo !== null;
   }
 
-  /**
-   * Puts an open task on today's list: its due date becomes today. The time of day, repeat and everything
-   * else stay as they were. A task that is already due today is left alone. Can be undone.
-   */
+  /** Puts an open task on the Today list. Its date and everything else stay as they were. Can be undone. */
   addToToday(id: string): Task {
     const old = this.find(id);
-    const today = this.today();
-    if (old.done || old.due === today) return old;
-    const moved = this.updateTask(id, { due: today });
-    this.lastUndo = { kind: 'move', before: old };
+    if (old.done || old.today) return old;
+    const moved = this.placedOnToday({ ...old, today: true });
+    this.setTasks(this.replace(moved));
+    this.lastUndo = { kind: 'move', before: [old] };
     return moved;
+  }
+
+  /** Puts every open task of a category (or of the Inbox) on the Today list. Returns how many were added. Can be undone. */
+  addAllToToday(categoryId: string | null): number {
+    const before = this.data.tasks.filter((t) => t.categoryId === categoryId && !t.done && !t.today);
+    if (!before.length) return 0;
+    const top = this.dashboardOrder() === 'manual' ? this.topTodayPos() - before.length : 0;
+    const ids = new Map(before.map((t, i) => [t.id, i]));
+    const shown = this.isManual(categoryId) ? this.manualSort(before) : this.sortBy(before, this.listOrder(categoryId));
+    const rank = new Map(shown.map((t, i) => [t.id, i]));
+    this.setTasks(
+      this.data.tasks.map((t) =>
+        ids.has(t.id) ? { ...t, today: true, ...(this.dashboardOrder() === 'manual' ? { todayPos: top + rank.get(t.id)! } : {}) } : t,
+      ),
+    );
+    this.lastUndo = { kind: 'move', before };
+    return before.length;
+  }
+
+  /** Takes a task off the Today list; it stays in its category. */
+  removeFromToday(id: string): void {
+    const old = this.find(id);
+    if (!old.today) return;
+    this.setTasks(this.replace({ ...old, today: false }));
+    this.lastUndo = null;
   }
 
   /** Reverses the most recent delete, completion or move to today. Returns what was undone. */
@@ -358,8 +382,9 @@ export class TaskCore {
       tasks.splice(Math.min(u.index, tasks.length), 0, u.task);
       this.setTasks(tasks);
     } else if (u.kind === 'move') {
-      if (!this.data.tasks.some((x) => x.id === u.before.id)) return null;
-      this.setTasks(this.replace(u.before));
+      const back = new Map(u.before.map((t) => [t.id, t]));
+      if (!this.data.tasks.some((x) => back.has(x.id))) return null;
+      this.setTasks(this.data.tasks.map((x) => back.get(x.id) ?? x));
     } else {
       const current = this.data.tasks.find((x) => x.id === u.before.id);
       if (!current) return null;
@@ -486,8 +511,9 @@ export class TaskCore {
     return id ? this.data.categories.find((c) => c.id === id) : undefined;
   }
 
+  /** Past its date and not done. A task on the Today list is carried over, not late. */
   isOverdue(t: Task, today = this.today()): boolean {
-    return !t.done && !!t.due && t.due < today;
+    return !t.done && !t.today && !!t.due && t.due < today;
   }
 
   /** Overdue first, then due date, due time (untimed last), priority; completed tasks last. */
@@ -539,25 +565,21 @@ export class TaskCore {
     const today = this.today();
     const tomorrow = addDays(today, 1);
     const order = this.dashboardOrder();
-    const overdue = this.sortBy(this.data.tasks.filter((t) => this.isOverdue(t, today)), order, today);
-    const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today && !!t.due && t.due < today;
-    const tasks = this.sortBy(this.data.tasks.filter((t) => t.due === today || doneToday(t)), order, today);
-    const all = [...overdue, ...tasks];
+    const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today;
+    const all = this.sortBy(this.data.tasks.filter((t) => t.today && (!t.done || doneToday(t))), order, today);
+    const tasks = all;
     const todayList = order === 'manual' ? this.manualToday(all) : all;
-    const undated = this.sortBy(this.data.tasks.filter((t) => !t.due && !t.done && this.isDaily(t.categoryId)), order, today);
     const ids: (string | null)[] = [...this.categories().map((c) => c.id), null];
     const categories = ids.map((categoryId) => {
-      const mine = [...all, ...undated].filter((t) => t.categoryId === categoryId);
+      const mine = all.filter((t) => t.categoryId === categoryId);
       return { categoryId, total: mine.length, left: mine.filter((t) => !t.done).length };
     });
     return {
       today,
       tomorrow,
       progress: { done: all.filter((t) => t.done).length, total: all.length },
-      overdue,
       tasks,
       todayList,
-      undated,
       categories,
       tomorrowItems: this.occurrences(tomorrow, tomorrow),
     };
@@ -650,7 +672,7 @@ export class TaskCore {
 
   /** A task that joins a Today list arranged by hand goes on top of it. */
   private placedOnToday(task: Task): Task {
-    return this.dashboardOrder() === 'manual' && !task.done && task.due === this.today() ? { ...task, todayPos: this.topTodayPos() } : task;
+    return this.dashboardOrder() === 'manual' && !task.done && task.today ? { ...task, todayPos: this.topTodayPos() } : task;
   }
 
   /** A position above every open task already placed in the Today list. */
