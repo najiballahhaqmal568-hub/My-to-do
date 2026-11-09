@@ -7,7 +7,7 @@ import { useApp } from '../context';
 import { Icon } from '../icons';
 import { UpdateBanner } from '../components/UpdateBanner';
 import { OrderBar } from '../components/OrderBar';
-import type { ListOrder } from '../../core/types';
+import { ManualList } from './ListScreen';
 
 export function Dashboard() {
   const { core, lang, t, tick, navigate, openEditor } = useApp();
@@ -16,7 +16,10 @@ export function Dashboard() {
   const greeting = hour < 12 ? t.greetingMorning : hour < 17 ? t.greetingDay : t.greetingEvening;
   const left = d.progress.total - d.progress.done;
   const allDone = d.progress.total > 0 && left === 0;
-  const list = [...d.overdue, ...d.tasks];
+  const list = d.todayList;
+  const manual = core.dashboardOrder() === 'manual';
+  const openList = list.filter((x) => !x.done);
+  const doneList = list.filter((x) => x.done);
   const cats = core.categories();
   const inbox = d.categories.find((c) => c.categoryId === null)!;
 
@@ -101,11 +104,23 @@ export function Dashboard() {
         {t.todaysTasks}
         <span>{t.taskCount(list.length)}</span>
       </h2>
-      {list.length + d.undated.length > 1 && (
-        <OrderBar value={core.dashboardOrder()} options={['time', 'newest', 'priority', 'title']} onChange={(o) => core.setDashboardOrder(o as Exclude<ListOrder, 'manual'>)} />
-      )}
+      <OrderBar value={core.dashboardOrder()} options={['time', 'newest', 'priority', 'title', 'manual']} onChange={(o) => core.setDashboardOrder(o)} />
+      {manual && openList.length > 1 && <p className="muted mode-hint">{t.orderHint}</p>}
       {list.length === 0 ? (
         <div className="empty">{t.nothingToday}</div>
+      ) : manual ? (
+        <>
+          {openList.length > 0 && <ManualList tasks={openList} onReorder={(ids) => core.reorderToday(ids)} showCategory showDate={false} todayButton={false} />}
+          {doneList.length > 0 && (
+            <div className="list">
+              <AnimatePresence initial={false}>
+                {doneList.map((task) => (
+                  <TaskRow key={task.id} task={task} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </>
       ) : (
         <div className="list">
           <AnimatePresence initial={false}>

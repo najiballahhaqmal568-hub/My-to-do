@@ -25,7 +25,7 @@ export function ListScreen({ categoryId }: { categoryId: string | null }) {
       {view.open.length === 0 ? (
         <div className="empty">{t.nothingHere}</div>
       ) : manual ? (
-        <ManualList tasks={view.open} categoryId={categoryId} />
+        <ManualList tasks={view.open} onReorder={(ids) => core.reorder(categoryId, ids)} showCategory={false} showDate todayButton />
       ) : (
         <div className="list">
           <AnimatePresence initial={false}>
@@ -65,9 +65,14 @@ export function ListScreen({ categoryId }: { categoryId: string | null }) {
   );
 }
 
+interface RowOptions {
+  showCategory: boolean;
+  showDate: boolean;
+  todayButton: boolean;
+}
+
 /** A list the user arranges by hand: drag the handle, or press the arrow keys while it has focus. */
-function ManualList({ tasks, categoryId }: { tasks: Task[]; categoryId: string | null }) {
-  const { core } = useApp();
+export function ManualList({ tasks, onReorder, ...options }: { tasks: Task[]; onReorder(orderedIds: string[]): void } & RowOptions) {
   const ids = tasks.map((x) => x.id);
   const key = ids.join('|');
   const [order, setOrder] = useState(ids);
@@ -80,7 +85,7 @@ function ManualList({ tasks, categoryId }: { tasks: Task[]; categoryId: string |
 
   const commit = (next: string[]) => {
     setOrder(next);
-    core.reorder(categoryId, next);
+    onReorder(next);
   };
   const move = (id: string, delta: -1 | 1) => {
     const list = [...shown];
@@ -95,13 +100,13 @@ function ManualList({ tasks, categoryId }: { tasks: Task[]; categoryId: string |
   return (
     <Reorder.Group axis="y" values={shown} onReorder={setOrder} as="div" className="list" data-testid="manual-list">
       {shown.map((id) => (
-        <ManualRow key={id} task={byId.get(id)!} onDrop={() => core.reorder(categoryId, latest.current)} onMove={move} />
+        <ManualRow key={id} task={byId.get(id)!} onDrop={() => onReorder(latest.current)} onMove={move} {...options} />
       ))}
     </Reorder.Group>
   );
 }
 
-function ManualRow({ task, onDrop, onMove }: { task: Task; onDrop: () => void; onMove: (id: string, delta: -1 | 1) => void }) {
+function ManualRow({ task, onDrop, onMove, showCategory, showDate, todayButton }: { task: Task; onDrop: () => void; onMove: (id: string, delta: -1 | 1) => void } & RowOptions) {
   const { t } = useApp();
   const controls = useDragControls();
   return (
@@ -116,9 +121,9 @@ function ManualRow({ task, onDrop, onMove }: { task: Task; onDrop: () => void; o
     >
       <TaskRow
         task={task}
-        showCategory={false}
-        showDate
-        todayButton
+        showCategory={showCategory}
+        showDate={showDate}
+        todayButton={todayButton}
         plain
         handle={
           <button

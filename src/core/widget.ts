@@ -44,7 +44,7 @@ export function widgetSnapshot(core: TaskCore): WidgetSnapshot {
   const t = MESSAGES[lang];
   const d = core.dashboard();
   const open = (tasks: Task[]) => tasks.filter((x) => !x.done);
-  const list = [...open(d.overdue), ...open(d.tasks), ...d.undated];
+  const list = [...open(d.todayList), ...d.undated];
   const items: WidgetItem[] = list.slice(0, WIDGET_ROWS).map((task) => ({
     title: task.title,
     time: task.time ? formatTime(lang, task.time) : '',

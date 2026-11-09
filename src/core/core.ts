@@ -59,6 +59,8 @@ export interface Dashboard {
   tasks: Task[];
   /** Open tasks with no due date; they are not part of today's progress. */
   undated: Task[];
+  /** What the Today list shows: overdue tasks and today's, in the order chosen for Today. Completed ones go last. */
+  todayList: Task[];
   /** Per category: today's and overdue tasks plus open undated ones. */
   categories: CategoryProgress[];
   tomorrowItems: Occurrence[];
@@ -216,7 +218,8 @@ export class TaskCore {
 
   addTask(input: TaskInput): Task {
     const task = this.build({ id: newId(), createdAt: this.now().toISOString(), done: false, completedAt: null, spawnedId: null }, input);
-    const placed = this.isManual(task.categoryId) ? { ...task, pos: this.topPos(task.categoryId) } : task;
+    let placed = this.isManual(task.categoryId) ? { ...task, pos: this.topPos(task.categoryId) } : task;
+    placed = this.placedOnToday(placed);
     this.setTasks([...this.data.tasks, placed]);
     return placed;
   }
@@ -241,6 +244,7 @@ export class TaskCore {
     };
     let task = this.build({ ...old, snoozedUntil: null }, merged);
     if (task.categoryId !== old.categoryId && this.isManual(task.categoryId)) task = { ...task, pos: this.topPos(task.categoryId) };
+    if (task.due !== old.due) task = this.placedOnToday(task);
     this.setTasks(this.replace(task));
     return task;
   }
@@ -539,6 +543,7 @@ export class TaskCore {
     const doneToday = (t: Task) => t.done && !!t.completedAt && localISO(new Date(t.completedAt)) === today && !!t.due && t.due < today;
     const tasks = this.sortBy(this.data.tasks.filter((t) => t.due === today || doneToday(t)), order, today);
     const all = [...overdue, ...tasks];
+    const todayList = order === 'manual' ? this.manualToday(all) : all;
     const undated = this.sortBy(this.data.tasks.filter((t) => !t.due && !t.done && this.isDaily(t.categoryId)), order, today);
     const ids: (string | null)[] = [...this.categories().map((c) => c.id), null];
     const categories = ids.map((categoryId) => {
@@ -551,6 +556,7 @@ export class TaskCore {
       progress: { done: all.filter((t) => t.done).length, total: all.length },
       overdue,
       tasks,
+      todayList,
       undated,
       categories,
       tomorrowItems: this.occurrences(tomorrow, tomorrow),
@@ -620,15 +626,46 @@ export class TaskCore {
     this.commit({ ...this.data, tasks, settings: { ...this.data.settings, listOrders: { ...this.data.settings.listOrders, [listKey(categoryId)]: order } } });
   }
 
-  /** How the dashboard's lists are arranged; they mix categories, so there is no manual order. */
+  /** How the Today list is arranged: the same choices as a category, manual included. */
   dashboardOrder(): ListOrder {
-    const order = this.data.settings.listOrders[TODAY_KEY] ?? 'time';
-    return order === 'manual' ? 'time' : order;
+    return this.data.settings.listOrders[TODAY_KEY] ?? 'time';
   }
 
-  setDashboardOrder(order: Exclude<ListOrder, 'manual'>): void {
+  /** Arranges the Today list. Switching to manual keeps the order you see now, so you start from there. */
+  setDashboardOrder(order: ListOrder): void {
     if (order === this.dashboardOrder()) return;
-    this.updateSettings({ listOrders: { ...this.data.settings.listOrders, [TODAY_KEY]: order } });
+    let tasks = this.data.tasks;
+    if (order === 'manual') {
+      const frozen = new Map(this.dashboard().todayList.filter((t) => !t.done).map((t, i) => [t.id, i]));
+      tasks = tasks.map((t) => (frozen.has(t.id) ? { ...t, todayPos: frozen.get(t.id)! } : t));
+    }
+    this.commit({ ...this.data, tasks, settings: { ...this.data.settings, listOrders: { ...this.data.settings.listOrders, [TODAY_KEY]: order } } });
+  }
+
+  /** Puts the given tasks of the Today list in this order. */
+  reorderToday(orderedIds: string[]): void {
+    const pos = new Map(orderedIds.map((id, i) => [id, i]));
+    this.setTasks(this.data.tasks.map((t) => (pos.has(t.id) ? { ...t, todayPos: pos.get(t.id)! } : t)));
+  }
+
+  /** A task that joins a Today list arranged by hand goes on top of it. */
+  private placedOnToday(task: Task): Task {
+    return this.dashboardOrder() === 'manual' && !task.done && task.due === this.today() ? { ...task, todayPos: this.topTodayPos() } : task;
+  }
+
+  /** A position above every open task already placed in the Today list. */
+  private topTodayPos(): number {
+    const placed = this.dashboard().todayList.filter((t) => !t.done && t.todayPos != null).map((t) => t.todayPos as number);
+    return placed.length ? Math.min(...placed) - 1 : 0;
+  }
+
+  /** The Today list by hand: open tasks by their place (a task not placed yet goes on top, newest first), then completed ones. */
+  private manualToday(tasks: Task[]): Task[] {
+    const added = this.addedOrder();
+    const open = tasks
+      .filter((t) => !t.done)
+      .sort((a, b) => (a.todayPos ?? -1e9) - (b.todayPos ?? -1e9) || (added.get(b.id) ?? 0) - (added.get(a.id) ?? 0));
+    return [...open, ...tasks.filter((t) => t.done)];
   }
 
   isManual(categoryId: string | null): boolean {

@@ -31,6 +31,9 @@ const TABS: { route: Route['name']; icon: IconName; label: 'dashboard' | 'upcomi
   { route: 'settings', icon: 'gear', label: 'settings' },
 ];
 
+/** How long the app must have been away before it opens on Today again. */
+const HOME_AFTER_MS = 60_000;
+
 export function App({ core }: { core: TaskCore }) {
   const version = useSyncExternalStore(core.subscribe, () => core.version);
   const [minute, setMinute] = useState(0);
@@ -59,9 +62,16 @@ export function App({ core }: { core: TaskCore }) {
   // Keep "today" fresh while the app stays open, and after it returns from the background.
   useEffect(() => {
     const id = window.setInterval(() => setMinute((m) => m + 1), 30000);
-    onResume(() => {
+    onResume((away) => {
       setMinute((m) => m + 1);
       setResumes((r) => r + 1);
+      // Coming back after a while, the app opens on Today, where the day is spent, unless something is being edited.
+      const l = layers.current;
+      const limit = (window as unknown as { __homeAfterMs?: number }).__homeAfterMs ?? HOME_AFTER_MS;
+      if (away >= limit && !l.editor && l.catEditor === undefined && !l.dialog && !(l.stack.length === 1 && l.stack[0].name === 'dashboard')) {
+        setStack([{ name: 'dashboard' }]);
+        window.scrollTo(0, 0);
+      }
     });
     return () => window.clearInterval(id);
   }, []);
