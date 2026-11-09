@@ -127,7 +127,7 @@ test('switches to English and back', async ({ page }) => {
   await page.getByRole('button', { name: 'English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   await expect(page.getByRole('navigation').getByRole('button', { name: 'Settings' })).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'Today' }).click();
   await expect(page.getByTestId('today-date')).toHaveText('Monday, September 28');
   await page.getByRole('navigation').getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'دری / فارسی' }).click();
@@ -166,13 +166,13 @@ test('exports a backup and imports it again', async ({ page }) => {
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'خروجی گرفتن' }).click();
   const file = await (await downloadPromise).path();
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await addTask(page, 'اضافی');
   await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
   await page.getByTestId('import-input').setInputFiles(file);
   await page.getByRole('alertdialog').getByRole('button', { name: 'جایگزین کن' }).click();
   await expect(page.getByText('پشتیبان وارد شد.')).toBeVisible();
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(row(page, 'نگه‌دار')).toBeVisible();
   await expect(row(page, 'اضافی')).toHaveCount(0);
 });
@@ -189,7 +189,7 @@ test('tasks added in a category show on the dashboard', async ({ page }) => {
   await open(page);
   await page.getByTestId('cat-card-دوکان').click();
   await addTask(page, 'سفارش جنس');
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(row(page, 'سفارش جنس')).toBeVisible();
   await expect(page.getByTestId('cat-card-دوکان')).toContainText('۱ مانده');
 });
@@ -225,7 +225,7 @@ test('the bedtime time is chosen on the 12-hour clock too', async ({ page }) => 
   await page.getByRole('navigation').getByRole('button', { name: 'تنظیمات' }).click();
   await page.locator('#bedtime-time-hour').selectOption('21');
   await page.locator('#bedtime-time-minute').selectOption('30');
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByText('اعلان فردا ۹:۳۰ شب')).toBeVisible();
 });
 
@@ -372,7 +372,7 @@ test('a list can be arranged by hand with the arrow keys and by dragging', async
   await expect.poll(titles).toEqual(['دوم', 'سوم', 'اول']);
 
   // The arrangement is kept, and a new task goes on top of it.
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await page.getByTestId('cat-card-دوکان').click();
   await expect(page.getByTestId('manual-list')).toBeVisible();
   await expect.poll(titles).toEqual(['دوم', 'سوم', 'اول']);
@@ -404,14 +404,14 @@ test('lists and the dashboard can be sorted by newest, priority or name', async 
   await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
 
   // The choice is remembered for this list after leaving it.
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await page.getByTestId('cat-card-دوکان').click();
   await expect(page.getByTestId('order-priority')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
 
-  // The dashboard has its own choice, without manual order since it mixes categories.
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
-  await expect(page.getByTestId('dashboard').getByTestId('order-manual')).toHaveCount(0);
+  // Today has its own choice, with the same chips.
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('order-manual')).toHaveCount(1);
   await page.getByTestId('dashboard').getByTestId('order-title').click();
   await expect.poll(() => titles('dashboard')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
 });
@@ -421,7 +421,7 @@ test('a task in a category can be added to today, and that can be undone', async
   // From the Upcoming screen a new task is due tomorrow.
   await page.getByRole('navigation').getByRole('button', { name: 'آینده' }).click();
   await addTask(page, 'نان فردا', { category: 'دوکان' });
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
 
   await page.getByTestId('cat-card-دوکان').click();
@@ -432,7 +432,7 @@ test('a task in a category can be added to today, and that can be undone', async
   await expect(list.getByTestId('in-today')).toHaveCount(1);
   await expect(list.getByRole('button', { name: /افزودن به امروز/ })).toHaveCount(0);
 
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(1);
 
   // Undo puts it back on tomorrow.
@@ -450,13 +450,13 @@ test('a category can be kept off the daily dashboard and its tasks brought to to
   await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
 
   // The card is gone from the dashboard, and a task added in the category starts without a date.
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
   await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
   await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'دوکان' }).first().click();
   await addTask(page, 'سفارش قند');
   await expect(page.getByTestId('list-screen').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(1);
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(0);
   await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
 
@@ -464,7 +464,51 @@ test('a category can be kept off the daily dashboard and its tasks brought to to
   await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
   await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'دوکان' }).first().click();
   await page.getByTestId('list-screen').getByRole('button', { name: 'افزودن به امروز: سفارش قند' }).click();
-  await page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(1);
   await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(1);
+});
+
+test('the Today list can be arranged by hand across categories, and the app opens on Today after being away', async ({ page }) => {
+  await open(page);
+  for (const [title, category] of [['دویدن', '🏃 ورزش'], ['نان', '🏪 دوکان'], ['کتاب', '📚 مطالعه']]) await addTask(page, title, { category });
+  const dash = page.getByTestId('dashboard');
+  const titles = () => dash.getByTestId('task-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-title')));
+  await expect(dash.getByTestId('order-bar')).toBeVisible();
+  await expect.poll(titles).toEqual(['کتاب', 'نان', 'دویدن']);
+
+  await dash.getByTestId('order-manual').click();
+  await expect(dash.getByTestId('manual-list')).toBeVisible();
+  const handle = (title: string) => dash.getByRole('button', { name: `جابه‌جایی: ${title}` });
+  await handle('دویدن').focus();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(titles).toEqual(['دویدن', 'کتاب', 'نان']);
+
+  // The arrangement is kept when leaving and coming back, and a new task goes on top.
+  await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
+  await expect.poll(titles).toEqual(['دویدن', 'کتاب', 'نان']);
+  await addTask(page, 'تازه', { category: '🏪 دوکان' });
+  await expect.poll(titles).toEqual(['تازه', 'دویدن', 'کتاب', 'نان']);
+
+  // Away for a while, the app opens on Today again; a quick glance at another app does not move you.
+  const away = async (ms: number) => {
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(ms);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  };
+  await page.evaluate(() => ((window as unknown as { __homeAfterMs: number }).__homeAfterMs = 400));
+  await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
+  await expect(page.getByTestId('dashboard')).toHaveCount(0);
+  await away(50);
+  await expect(page.getByTestId('dashboard')).toHaveCount(0);
+  await away(600);
+  await expect(page.getByTestId('dashboard')).toBeVisible();
 });

@@ -44,6 +44,8 @@ export interface Task {
   snoozedUntil?: string | null;
   /** Position in a list that is in manual order (smaller is higher). */
   pos?: number | null;
+  /** Position in the Today list while that is arranged by hand (smaller is higher). */
+  todayPos?: number | null;
 }
 
 export type CategoryColor = 'green' | 'orange' | 'indigo' | 'rose' | 'teal' | 'violet' | 'amber' | 'sky';

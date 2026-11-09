@@ -188,7 +188,7 @@ const screenPoint = async (locator) => {
   });
   return { x: Math.round(origin.x + p.x), y: Math.round(origin.y + p.y) };
 };
-await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await tap(page.getByRole('navigation').getByRole('button', { name: 'امروز' }));
 await sleep(800);
 await tap(page.getByTestId('cat-card-دوکان'));
 await page.getByTestId('list-screen').waitFor();
@@ -216,13 +216,13 @@ shot('7b-manual-order');
 const arranged = JSON.stringify(await order());
 check(arranged === JSON.stringify(['اول', 'سوم', 'دوم']), `dragging the handle with a finger moves a task to the top (${arranged})`);
 // And the arrangement is stored.
-await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await tap(page.getByRole('navigation').getByRole('button', { name: 'امروز' }));
 await sleep(800);
 await tap(page.getByTestId('cat-card-دوکان'));
 await page.getByTestId('list-screen').waitFor();
 await sleep(800);
 check(JSON.stringify(await order()) === JSON.stringify(['اول', 'سوم', 'دوم']), 'the arrangement is kept after leaving the list');
-await tap(page.getByRole('navigation').getByRole('button', { name: 'داشبورد' }));
+await tap(page.getByRole('navigation').getByRole('button', { name: 'امروز' }));
 await sleep(800);
 
 // Cancelling the share sheet is reported by Capacitor as an error; that is expected here.

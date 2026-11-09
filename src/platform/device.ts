@@ -79,9 +79,20 @@ export function minimizeApp(): void {
   if (isNative) App.minimizeApp().catch(() => undefined);
 }
 
-export function onResume(handler: () => void): void {
-  if (isNative) App.addListener('resume', handler);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') handler();
-  });
+/** Calls `handler` when the app comes back to the screen, with how long it was away (0 on a repeated signal). */
+export function onResume(handler: (awayMs: number) => void): void {
+  let leftAt: number | null = null;
+  const left = () => {
+    if (leftAt === null) leftAt = performance.now();
+  };
+  const back = () => {
+    const away = leftAt === null ? 0 : performance.now() - leftAt;
+    leftAt = null;
+    handler(away);
+  };
+  if (isNative) {
+    App.addListener('pause', left);
+    App.addListener('resume', back);
+  }
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? back() : left()));
 }

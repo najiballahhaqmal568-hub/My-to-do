@@ -681,6 +681,68 @@ describe('categories kept off the daily dashboard', () => {
   });
 });
 
+describe('the Today list arranged by hand', () => {
+  const today = () => titles(core.dashboard().todayList);
+  const fill = () => {
+    core.addTask({ title: 'ب', categoryId: 'shop', due: '2026-09-28', time: '09:00' });
+    core.addTask({ title: 'الف', categoryId: 'sport', due: '2026-09-28', time: '07:00' });
+    core.addTask({ title: 'ج', due: '2026-09-28', time: '12:00' });
+    core.addTask({ title: 'دیروز', categoryId: 'study', due: '2026-09-27' });
+  };
+
+  it('has the other sort orders, and keeps overdue tasks first in them', () => {
+    fill();
+    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+    core.setDashboardOrder('title');
+    expect(core.dashboardOrder()).toBe('title');
+    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+  });
+
+  it('starts manual order from the order you see, then follows your arrangement across categories', () => {
+    fill();
+    core.setDashboardOrder('manual');
+    expect(core.dashboardOrder()).toBe('manual');
+    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+    const ids = core.dashboard().todayList.map((t) => t.id);
+    core.reorderToday([ids[3], ids[1], ids[0], ids[2]]);
+    expect(today()).toEqual(['ج', 'الف', 'دیروز', 'ب']);
+    // The category lists are not affected.
+    expect(core.list('sport').open.map((t) => t.title)).toEqual(['الف']);
+    // Like a category list, switching back to manual starts again from the order you see.
+    core.setDashboardOrder('time');
+    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+    core.setDashboardOrder('manual');
+    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+  });
+
+  it('puts a new task and a task brought to today on top, and completed tasks last', () => {
+    fill();
+    core.setDashboardOrder('manual');
+    const later = core.addTask({ title: 'بعداً', categoryId: 'shop', due: '2026-10-02' });
+    core.addTask({ title: 'تازه', due: '2026-09-28' });
+    expect(today()[0]).toBe('تازه');
+    core.addToToday(later.id);
+    expect(today().slice(0, 2)).toEqual(['بعداً', 'تازه']);
+    const first = core.dashboard().todayList.find((t) => t.title === 'الف')!;
+    core.setDone(first.id, true);
+    expect(today().at(-1)).toBe('الف');
+    expect(core.undo()).toBe('complete');
+  });
+
+  it('survives export and import, and the widget follows the arrangement', () => {
+    fill();
+    core.setDashboardOrder('manual');
+    const ids = core.dashboard().todayList.map((t) => t.id);
+    core.reorderToday([...ids].reverse());
+    const arranged = today();
+    const json = core.exportBackup();
+    core.setDashboardOrder('time');
+    core.importBackup(json);
+    expect(core.dashboardOrder()).toBe('manual');
+    expect(today()).toEqual(arranged);
+  });
+});
+
 describe('add to today', () => {
   it('moves a task to today, keeps its time and repeat, and can be undone', () => {
     const t = core.addTask({ title: 'خرید', categoryId: 'shop', due: '2026-10-05', time: '09:30', repeat: { kind: 'weekly' } });
