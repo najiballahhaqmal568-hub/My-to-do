@@ -7,7 +7,7 @@ import { useApp } from '../context';
 import { Icon } from '../icons';
 
 export function ListScreen({ categoryId }: { categoryId: string | null }) {
-  const { core, t, tick, back } = useApp();
+  const { core, t, tick, back, toast } = useApp();
   const [showDone, setShowDone] = useState(false);
   const view = useMemo(() => core.list(categoryId), [core, categoryId, tick]);
   const cat = core.category(categoryId);
@@ -19,6 +19,19 @@ export function ListScreen({ categoryId }: { categoryId: string | null }) {
           <Icon name="back" className="flip" />
         </button>
         <h1>{cat ? `${cat.emoji} ${cat.name}` : t.inbox}</h1>
+        {view.open.some((x) => !x.today) && (
+          <button
+            className="today-btn"
+            data-testid="add-all-to-today"
+            onClick={() => {
+              const n = core.addAllToToday(categoryId);
+              if (n) toast(t.addedAllToToday(n), true);
+            }}
+          >
+            <Icon name="plus" small />
+            {t.addAllToToday}
+          </button>
+        )}
       </header>
       <OrderBar value={core.listOrder(categoryId)} options={['time', 'newest', 'priority', 'title', 'manual']} onChange={(o) => core.setListOrder(categoryId, o)} />
       {manual && <p className="muted mode-hint">{t.orderHint}</p>}

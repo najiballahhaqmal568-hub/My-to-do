@@ -29,6 +29,7 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
   const [notes, setNotes] = useState(init.notes ?? '');
   const [categoryId, setCategoryId] = useState<string | null>(init.categoryId ?? null);
   const [due, setDue] = useState(init.due ?? null);
+  const [onToday, setOnToday] = useState(!!init.today);
   const [time, setTime] = useState(init.time ?? '');
   const [priority, setPriority] = useState<Priority>(init.priority ?? 'none');
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(init.repeat?.kind ?? 'none');
@@ -76,6 +77,7 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
       repeat: rule(),
       reminder: due && time ? reminder : null,
       subtasks: pending,
+      today: onToday,
     };
     try {
       if (existing) core.updateTask(existing.id, input);
@@ -170,6 +172,14 @@ export function TaskEditor({ request, onClose }: { request: EditorRequest; onClo
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="card-row" style={{ borderBottom: 0, marginBottom: 6, paddingBlock: 4 }}>
+        <label className="grow" htmlFor="task-today">
+          {t.onToday}
+          <small>{t.onTodayHint}</small>
+        </label>
+        <button type="button" id="task-today" className="switch" role="switch" aria-checked={onToday} onClick={() => setOnToday(!onToday)} />
       </div>
 
       <div className="field">

@@ -185,23 +185,28 @@ test('works with reduced motion', async ({ page }) => {
   await expect(page.getByText('۱ از ۱ انجام شد')).toBeAttached();
 });
 
-test('tasks added in a category show on the dashboard', async ({ page }) => {
+test('a task added in a category stays off Today until you put it there', async ({ page }) => {
   await open(page);
   await page.getByTestId('cat-card-دوکان').click();
   await addTask(page, 'سفارش جنس');
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
+  await expect(row(page, 'سفارش جنس')).toHaveCount(0);
+  await page.getByTestId('cat-card-دوکان').click();
+  await page.getByRole('button', { name: 'افزودن به امروز: سفارش جنس' }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(row(page, 'سفارش جنس')).toBeVisible();
   await expect(page.getByTestId('cat-card-دوکان')).toContainText('۱ مانده');
 });
 
-test('tasks without a date appear in their own dashboard section', async ({ page }) => {
+test('a task made on Today without a date stays on Today', async ({ page }) => {
   await open(page);
   await page.getByTestId('fab').click();
   await page.locator('#task-title').fill('بی‌تاریخ');
+  await expect(page.getByRole('switch', { name: /در امروز/ })).toHaveAttribute('aria-checked', 'true');
   await page.getByTestId('date-field').click();
   await page.getByRole('dialog').getByRole('button', { name: 'بدون تاریخ', exact: true }).click();
   await page.getByRole('button', { name: 'ذخیره', exact: true }).click();
-  await expect(page.getByTestId('undated')).toContainText('بی‌تاریخ');
+  await expect(row(page, 'بی‌تاریخ')).toBeVisible();
 });
 
 test('shows times on the 12-hour clock in Dari and lets the user pick them that way', async ({ page }) => {
@@ -410,6 +415,7 @@ test('lists and the dashboard can be sorted by newest, priority or name', async 
   await expect.poll(() => titles('list-screen')).toEqual(['ج چای', 'الف شیر', 'ب نان']);
 
   // Today has its own choice, with the same chips.
+  await page.getByTestId('add-all-to-today').click();
   await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('order-manual')).toHaveCount(1);
   await page.getByTestId('dashboard').getByTestId('order-title').click();
@@ -435,8 +441,16 @@ test('a task in a category can be added to today, and that can be undone', async
   await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(1);
 
-  // Undo puts it back on tomorrow.
+  // Undo takes it off Today again.
   await page.getByRole('button', { name: 'برگرداندن', exact: true }).click();
+  await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
+
+  // Put back, it can also be taken off Today from the category list.
+  await page.getByTestId('cat-card-دوکان').click();
+  await list.getByRole('button', { name: 'افزودن به امروز: نان فردا' }).click();
+  await list.getByRole('button', { name: 'برداشتن از امروز: نان فردا' }).click();
+  await expect(page.getByText('از امروز برداشته شد')).toBeVisible();
+  await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'نان فردا' })).toHaveCount(0);
 });
 
@@ -460,13 +474,13 @@ test('a category can be kept off the daily dashboard and its tasks brought to to
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(0);
   await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
 
-  // «+ امروز» brings it onto the dashboard, and the category card with it.
+  // «+ امروز» brings it onto Today; the switched-off category still shows no card there.
   await page.getByRole('navigation').getByRole('button', { name: 'کتگوری‌ها' }).click();
   await page.locator('.cat-item', { hasText: 'دوکان' }).getByRole('button', { name: 'دوکان' }).first().click();
   await page.getByTestId('list-screen').getByRole('button', { name: 'افزودن به امروز: سفارش قند' }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'امروز' }).click();
   await expect(page.getByTestId('dashboard').getByTestId('task-row').filter({ hasText: 'سفارش قند' })).toHaveCount(1);
-  await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(1);
+  await expect(page.getByTestId('cat-card-دوکان')).toHaveCount(0);
 });
 
 test('the Today list can be arranged by hand across categories, and the app opens on Today after being away', async ({ page }) => {

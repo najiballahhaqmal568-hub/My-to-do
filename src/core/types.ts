@@ -46,6 +46,11 @@ export interface Task {
   pos?: number | null;
   /** Position in the Today list while that is arranged by hand (smaller is higher). */
   todayPos?: number | null;
+  /**
+   * On the Today list. Only the user puts a task there (and takes it off); a date never does. It stays until
+   * it is done or taken off, so an unfinished task is carried over to the next day.
+   */
+  today?: boolean;
 }
 
 export type CategoryColor = 'green' | 'orange' | 'indigo' | 'rose' | 'teal' | 'violet' | 'amber' | 'sky';
@@ -104,6 +109,8 @@ export interface TaskInput {
   repeat?: RepeatRule | null;
   reminder?: ReminderOffset | null;
   subtasks?: { id?: string; title: string; done?: boolean }[];
+  /** Put the task on the Today list (or take it off). Left out, an edit keeps what the task had. */
+  today?: boolean;
 }
 
 /** A task on a given day: either the live task itself or a projected future run of a repeating task. */

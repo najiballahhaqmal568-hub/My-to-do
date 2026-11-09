@@ -29,7 +29,7 @@ describe('first launch', () => {
   });
 
   it('persists tasks through the storage port', async () => {
-    core.addTask({ title: 'خرید نان', due: '2026-09-28' });
+    core.addTask({ title: 'خرید نان', due: '2026-09-28', today: true });
     await core.flush();
     const reopened = await TaskCore.open({ clock, storage });
     expect(titles(reopened.dashboard().tasks)).toEqual(['خرید نان']);
@@ -41,39 +41,41 @@ describe('adding and completing', () => {
     expect(() => core.addTask({ title: '   ' })).toThrowError(CoreError);
   });
 
-  it('counts progress over today and overdue tasks', () => {
-    const a = core.addTask({ title: 'a', due: '2026-09-28' });
-    core.addTask({ title: 'b', due: '2026-09-28' });
-    core.addTask({ title: 'late', due: '2026-09-27' });
+  it('counts progress over the tasks put on Today only', () => {
+    const a = core.addTask({ title: 'a', due: '2026-09-28', today: true });
+    core.addTask({ title: 'b', due: '2026-09-28', today: true });
+    core.addTask({ title: 'late', due: '2026-09-27', today: true });
     core.addTask({ title: 'later', due: '2026-10-02' });
+    core.addTask({ title: 'dated today', due: '2026-09-28' });
     core.setDone(a.id, true);
     const d = core.dashboard();
     expect(d.progress).toEqual({ done: 1, total: 3 });
-    expect(titles(d.overdue)).toEqual(['late']);
-    expect(titles(d.tasks)).toEqual(['b', 'a']);
+    expect(titles(d.tasks)).toEqual(['late', 'b', 'a']);
   });
 
-  it('keeps an overdue task completed today on the dashboard', () => {
-    const late = core.addTask({ title: 'late', due: '2026-09-26' });
+  it('keeps a task completed today on Today until the day ends', () => {
+    const late = core.addTask({ title: 'late', due: '2026-09-26', today: true });
     core.setDone(late.id, true);
-    const d = core.dashboard();
-    expect(d.overdue).toEqual([]);
-    expect(titles(d.tasks)).toEqual(['late']);
-    expect(d.progress).toEqual({ done: 1, total: 1 });
+    expect(titles(core.dashboard().tasks)).toEqual(['late']);
+    expect(core.dashboard().progress).toEqual({ done: 1, total: 1 });
+    clock.set(new Date('2026-09-29T08:00:00+04:30'));
+    expect(core.dashboard().tasks).toEqual([]);
   });
 
   it('un-completing reopens the task', () => {
-    const a = core.addTask({ title: 'a', due: '2026-09-28' });
+    const a = core.addTask({ title: 'a', due: '2026-09-28', today: true });
     core.setDone(a.id, true);
     core.setDone(a.id, false);
     expect(core.dashboard().progress).toEqual({ done: 0, total: 1 });
   });
 
-  it('turns a task overdue when the day changes', () => {
-    core.addTask({ title: 'a', due: '2026-09-28', time: '23:30' });
-    expect(core.dashboard().overdue).toEqual([]);
+  it('carries an unfinished Today task over to the next day without calling it late', () => {
+    const a = core.addTask({ title: 'a', due: '2026-09-28', time: '23:30', today: true });
+    const b = core.addTask({ title: 'b', due: '2026-09-28', time: '23:30' });
     clock.set(new Date('2026-09-29T00:01:00+04:30'));
-    expect(titles(core.dashboard().overdue)).toEqual(['a']);
+    expect(titles(core.dashboard().tasks)).toEqual(['a']);
+    expect(core.isOverdue(core.task(a.id)!)).toBe(false);
+    expect(core.isOverdue(core.task(b.id)!)).toBe(true);
   });
 
   it('ignores a time without a date and a reminder without a time', () => {
@@ -96,40 +98,72 @@ describe('sorting', () => {
   });
 });
 
-describe('tasks without a date', () => {
-  it('shows open undated tasks on the dashboard and counts them on category cards', () => {
-    core.addTask({ title: 'سفارش جنس', categoryId: 'shop' });
-    const done = core.addTask({ title: 'قدیمی', categoryId: 'shop' });
-    core.setDone(done.id, true);
+describe('only the user puts tasks on Today', () => {
+  it('never brings a task to Today because of its date, and counts category cards over Today', () => {
+    const undated = core.addTask({ title: 'سفارش جنس', categoryId: 'shop' });
     core.addTask({ title: 'امروز', categoryId: 'shop', due: '2026-09-28' });
+    core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27' });
+    expect(core.dashboard().tasks).toEqual([]);
+    core.addToToday(undated.id);
     const d = core.dashboard();
-    expect(titles(d.undated)).toEqual(['سفارش جنس']);
-    expect(titles(d.tasks)).toEqual(['امروز']);
+    expect(titles(d.tasks)).toEqual(['سفارش جنس']);
     expect(d.progress).toEqual({ done: 0, total: 1 });
-    expect(d.categories.find((c) => c.categoryId === 'shop')).toMatchObject({ left: 2, total: 2 });
+    expect(d.categories.find((c) => c.categoryId === 'shop')).toMatchObject({ left: 1, total: 1 });
+  });
+
+  it('can take a task off Today, and keeps the next run of a repeating task off it', () => {
+    const r = core.addTask({ title: 'ورزش', categoryId: 'sport', due: '2026-09-28', repeat: { kind: 'daily' }, today: true });
+    core.setDone(r.id, true);
+    const next = core.search('ورزش').find((x) => !x.done)!;
+    expect(next.today).toBe(false);
+    const t = core.addTask({ title: 'x', today: true });
+    core.removeFromToday(t.id);
+    expect(titles(core.dashboard().tasks)).toEqual(['ورزش']);
+    expect(core.list(null).open.map((x) => x.title)).toEqual(['x']);
+  });
+
+  it('puts all open tasks of a category on Today at once, and that can be undone', () => {
+    core.addTask({ title: 'نان', categoryId: 'shop' });
+    core.addTask({ title: 'شیر', categoryId: 'shop', due: '2026-09-20' });
+    const done = core.addTask({ title: 'قند', categoryId: 'shop' });
+    core.setDone(done.id, true);
+    expect(core.addAllToToday('shop')).toBe(2);
+    expect(titles(core.dashboard().tasks).sort()).toEqual(['شیر', 'نان'].sort());
+    expect(core.addAllToToday('shop')).toBe(0);
+    expect(core.undo()).toBe('move');
+    expect(core.dashboard().tasks).toEqual([]);
+  });
+
+  it('saves the Today flag through the editor input and keeps it on other edits', () => {
+    const t = core.addTask({ title: 'x' });
+    core.updateTask(t.id, { today: true });
+    core.updateTask(t.id, { notes: 'n' });
+    expect(core.task(t.id)?.today).toBe(true);
+    core.updateTask(t.id, { today: false });
+    expect(core.dashboard().tasks).toEqual([]);
   });
 });
 
 describe('newest first', () => {
   it('lists the most recently added task first among tasks that tie', () => {
-    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28' });
-    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28' });
-    core.addTask({ title: 'سه', categoryId: 'shop', due: '2026-09-28' });
+    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28', today: true });
+    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28', today: true });
+    core.addTask({ title: 'سه', categoryId: 'shop', due: '2026-09-28', today: true });
     expect(titles(core.list('shop').open)).toEqual(['سه', 'دو', 'یک']);
     expect(titles(core.dashboard().tasks)).toEqual(['سه', 'دو', 'یک']);
   });
 
   it('still orders by time and priority before recency', () => {
-    core.addTask({ title: 'نیم‌روز', due: '2026-09-28', time: '12:00' });
-    core.addTask({ title: 'مهم', due: '2026-09-28', priority: 'high' });
-    core.addTask({ title: 'ساده', due: '2026-09-28' });
-    core.addTask({ title: 'صبح', due: '2026-09-28', time: '07:00' });
+    core.addTask({ title: 'نیم‌روز', due: '2026-09-28', time: '12:00', today: true });
+    core.addTask({ title: 'مهم', due: '2026-09-28', priority: 'high', today: true });
+    core.addTask({ title: 'ساده', due: '2026-09-28', today: true });
+    core.addTask({ title: 'صبح', due: '2026-09-28', time: '07:00', today: true });
     expect(titles(core.dashboard().tasks)).toEqual(['صبح', 'نیم‌روز', 'مهم', 'ساده']);
   });
 
   it('keeps a task where it is when it is edited', () => {
-    const first = core.addTask({ title: 'قدیمی', due: '2026-09-28' });
-    core.addTask({ title: 'تازه', due: '2026-09-28' });
+    const first = core.addTask({ title: 'قدیمی', due: '2026-09-28', today: true });
+    core.addTask({ title: 'تازه', due: '2026-09-28', today: true });
     core.updateTask(first.id, { notes: 'تغییر' });
     expect(titles(core.dashboard().tasks)).toEqual(['تازه', 'قدیمی']);
   });
@@ -144,9 +178,9 @@ describe('newest first', () => {
 
 describe('categories and Inbox', () => {
   it('reports remaining work per category on the dashboard', () => {
-    const a = core.addTask({ title: 'run', categoryId: 'sport', due: '2026-09-28' });
-    core.addTask({ title: 'gym', categoryId: 'sport', due: '2026-09-28' });
-    core.addTask({ title: 'loose', due: '2026-09-28' });
+    const a = core.addTask({ title: 'run', categoryId: 'sport', due: '2026-09-28', today: true });
+    core.addTask({ title: 'gym', categoryId: 'sport', due: '2026-09-28', today: true });
+    core.addTask({ title: 'loose', due: '2026-09-28', today: true });
     core.setDone(a.id, true);
     const byId = Object.fromEntries(core.dashboard().categories.map((c) => [String(c.categoryId), c]));
     expect(byId.sport).toMatchObject({ left: 1, total: 2 });
@@ -269,7 +303,7 @@ describe('repeating tasks', () => {
     expect(open).toHaveLength(1);
     expect(open[0].due).toBe('2026-09-27');
     expect(open[0].subtasks.map((s) => s.done)).toEqual([false]);
-    expect(core.dashboard().overdue.map((x) => x.id)).toEqual([open[0].id]);
+    expect(core.isOverdue(open[0])).toBe(true);
   });
 
   it('removes the created occurrence when the completion is undone or reverted', () => {
@@ -540,31 +574,32 @@ describe('reminder buttons', () => {
 });
 
 describe('home screen widget snapshot', () => {
-  it('lists open tasks for today, overdue first, with category colours and times', async () => {
+  it('lists the open tasks on Today, with category colours and times', async () => {
     const { widgetSnapshot } = await import('./widget');
-    core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27' });
-    core.addTask({ title: 'دویدن', categoryId: 'sport', due: '2026-09-28', time: '06:30' });
-    core.addTask({ title: 'مرور', categoryId: 'study', due: '2026-09-28' });
-    const done = core.addTask({ title: 'انجام‌شده', due: '2026-09-28' });
+    core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27', today: true });
+    core.addTask({ title: 'دویدن', categoryId: 'sport', due: '2026-09-28', time: '06:30', today: true });
+    core.addTask({ title: 'مرور', categoryId: 'study', due: '2026-09-28', today: true });
+    const done = core.addTask({ title: 'انجام‌شده', due: '2026-09-28', today: true });
     core.setDone(done.id, true);
-    core.addTask({ title: 'بی‌تاریخ' });
+    core.addTask({ title: 'بی‌تاریخ', today: true });
+    core.addTask({ title: 'فقط تاریخ', due: '2026-09-28' });
     core.addTask({ title: 'فردا', due: '2026-09-29' });
     const s = widgetSnapshot(core);
     expect(s.title).toBe('دوشنبه، ۶ میزان');
     expect(s.day).toBe('2026-09-28');
     expect(s.rtl).toBe(true);
     expect(s.items.map((i) => i.title)).toEqual(['دیروز', 'دویدن', 'مرور', 'بی‌تاریخ']);
-    expect(s.items[0]).toMatchObject({ overdue: true, color: '#C06A00' });
+    expect(s.items[0]).toMatchObject({ overdue: false, color: '#C06A00' });
     expect(s.items[1]).toMatchObject({ time: '۶:۳۰ صبح', color: '#23875A', overdue: false });
-    expect(s.summary).toBe('۱ از ۴ انجام شد');
-    expect(s.progress).toBe(25);
+    expect(s.summary).toBe('۱ از ۵ انجام شد');
+    expect(s.progress).toBe(20);
     expect(s.tomorrow).toBe('فردا: ۱ کار');
     expect(s.more).toBe('');
   });
 
   it('shows at most six tasks and counts the rest', async () => {
     const { widgetSnapshot } = await import('./widget');
-    for (let i = 1; i <= 9; i++) core.addTask({ title: `کار ${i}`, due: '2026-09-28' });
+    for (let i = 1; i <= 9; i++) core.addTask({ title: `کار ${i}`, due: '2026-09-28', today: true });
     const s = widgetSnapshot(core);
     expect(s.items).toHaveLength(6);
     expect(s.more).toBe('+۳ کار دیگر');
@@ -573,7 +608,7 @@ describe('home screen widget snapshot', () => {
   it('speaks English when the app does', async () => {
     const { widgetSnapshot } = await import('./widget');
     core.updateSettings({ language: 'en' });
-    core.addTask({ title: 'Run', due: '2026-09-28', time: '18:30' });
+    core.addTask({ title: 'Run', due: '2026-09-28', time: '18:30', today: true });
     const s = widgetSnapshot(core);
     expect(s).toMatchObject({ rtl: false, title: 'Monday, September 28', summary: '0 of 1 done', tomorrow: 'Tomorrow: 0 tasks' });
     expect(s.items[0].time).toBe('6:30 PM');
@@ -614,10 +649,10 @@ describe('manual order', () => {
   });
 
   it('only changes the lists you arranged, and leaves the dashboard automatic', () => {
-    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28', time: '12:00' });
-    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28', time: '08:00' });
-    core.addTask({ title: 'ورزش ۱', categoryId: 'sport', due: '2026-09-28', time: '12:00' });
-    core.addTask({ title: 'ورزش ۲', categoryId: 'sport', due: '2026-09-28', time: '08:00' });
+    core.addTask({ title: 'یک', categoryId: 'shop', due: '2026-09-28', time: '12:00', today: true });
+    core.addTask({ title: 'دو', categoryId: 'shop', due: '2026-09-28', time: '08:00', today: true });
+    core.addTask({ title: 'ورزش ۱', categoryId: 'sport', due: '2026-09-28', time: '12:00', today: true });
+    core.addTask({ title: 'ورزش ۲', categoryId: 'sport', due: '2026-09-28', time: '08:00', today: true });
     core.setManual('shop', true);
     const [first, second] = core.list('shop').open.map((t) => t.id);
     core.reorder('shop', [first, second].reverse());
@@ -652,16 +687,13 @@ describe('manual order', () => {
 });
 
 describe('categories kept off the daily dashboard', () => {
-  it('hides undated tasks of a non-daily category, but not tasks given today\'s date', () => {
+  it('marks a category whose card stays off Today; its tasks still join Today when put there', () => {
     core.updateCategory('shop', { daily: false });
     expect(core.isDaily('shop')).toBe(false);
     expect(core.isDaily('sport')).toBe(true);
     expect(core.isDaily(null)).toBe(true);
     const a = core.addTask({ title: 'فروشگاه', categoryId: 'shop' });
-    core.addTask({ title: 'ورزش', categoryId: 'sport' });
-    expect(titles(core.dashboard().undated)).toEqual(['ورزش']);
     expect(core.dashboard().categories.find((c) => c.categoryId === 'shop')).toMatchObject({ total: 0, left: 0 });
-    // Giving it today's date brings it onto the dashboard, with its category counted.
     core.addToToday(a.id);
     expect(titles(core.dashboard().tasks)).toEqual(['فروشگاه']);
     expect(core.dashboard().categories.find((c) => c.categoryId === 'shop')).toMatchObject({ total: 1, left: 1 });
@@ -684,18 +716,18 @@ describe('categories kept off the daily dashboard', () => {
 describe('the Today list arranged by hand', () => {
   const today = () => titles(core.dashboard().todayList);
   const fill = () => {
-    core.addTask({ title: 'ب', categoryId: 'shop', due: '2026-09-28', time: '09:00' });
-    core.addTask({ title: 'الف', categoryId: 'sport', due: '2026-09-28', time: '07:00' });
-    core.addTask({ title: 'ج', due: '2026-09-28', time: '12:00' });
-    core.addTask({ title: 'دیروز', categoryId: 'study', due: '2026-09-27' });
+    core.addTask({ title: 'ب', categoryId: 'shop', due: '2026-09-28', time: '09:00', today: true });
+    core.addTask({ title: 'الف', categoryId: 'sport', due: '2026-09-28', time: '07:00', today: true });
+    core.addTask({ title: 'ج', due: '2026-09-28', time: '12:00', today: true });
+    core.addTask({ title: 'دیروز', categoryId: 'study', due: '2026-09-27', today: true });
   };
 
-  it('has the other sort orders, and keeps overdue tasks first in them', () => {
+  it('has the other sort orders, earlier dates first in the time order', () => {
     fill();
     expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
     core.setDashboardOrder('title');
     expect(core.dashboardOrder()).toBe('title');
-    expect(today()).toEqual(['دیروز', 'الف', 'ب', 'ج']);
+    expect(today()).toEqual(['الف', 'ب', 'ج', 'دیروز']);
   });
 
   it('starts manual order from the order you see, then follows your arrangement across categories', () => {
@@ -719,7 +751,7 @@ describe('the Today list arranged by hand', () => {
     fill();
     core.setDashboardOrder('manual');
     const later = core.addTask({ title: 'بعداً', categoryId: 'shop', due: '2026-10-02' });
-    core.addTask({ title: 'تازه', due: '2026-09-28' });
+    core.addTask({ title: 'تازه', due: '2026-09-28', today: true });
     expect(today()[0]).toBe('تازه');
     core.addToToday(later.id);
     expect(today().slice(0, 2)).toEqual(['بعداً', 'تازه']);
@@ -744,36 +776,34 @@ describe('the Today list arranged by hand', () => {
 });
 
 describe('add to today', () => {
-  it('moves a task to today, keeps its time and repeat, and can be undone', () => {
+  it('puts a task on Today without touching its date, time or repeat, and can be undone', () => {
     const t = core.addTask({ title: 'خرید', categoryId: 'shop', due: '2026-10-05', time: '09:30', repeat: { kind: 'weekly' } });
     const moved = core.addToToday(t.id);
-    expect(moved.due).toBe('2026-09-28');
-    expect(moved.time).toBe('09:30');
+    expect(moved).toMatchObject({ today: true, due: '2026-10-05', time: '09:30' });
     expect(moved.repeat?.kind).toBe('weekly');
     expect(titles(core.dashboard().tasks)).toEqual(['خرید']);
     expect(core.undo()).toBe('move');
-    expect(core.task(t.id)?.due).toBe('2026-10-05');
+    expect(core.task(t.id)?.today).toBeFalsy();
     expect(core.dashboard().tasks).toEqual([]);
   });
 
-  it('puts an undated task on today, and brings an overdue one forward', () => {
+  it('puts an undated task and a late one on Today, where the late one is no longer marked late', () => {
     const a = core.addTask({ title: 'بدون تاریخ', categoryId: 'shop' });
     const b = core.addTask({ title: 'دیروز', categoryId: 'shop', due: '2026-09-27' });
-    expect(titles(core.dashboard().undated)).toEqual(['بدون تاریخ']);
+    expect(core.isOverdue(core.task(b.id)!)).toBe(true);
     core.addToToday(a.id);
     core.addToToday(b.id);
-    expect(core.dashboard().undated).toEqual([]);
-    expect(core.dashboard().overdue).toEqual([]);
-    expect(titles(core.dashboard().tasks).sort()).toEqual(['بدون تاریخ', 'دیروز']);
+    expect(titles(core.dashboard().tasks).sort()).toEqual(['بدون تاریخ', 'دیروز'].sort());
+    expect(core.isOverdue(core.task(b.id)!)).toBe(false);
   });
 
-  it('leaves a task already due today, and a completed task, alone', () => {
-    const a = core.addTask({ title: 'امروزی', due: '2026-09-28' });
+  it('leaves a task already on Today, and a completed task, alone', () => {
+    const a = core.addTask({ title: 'امروزی', today: true });
     const done = core.addTask({ title: 'تمام', due: '2026-09-20' });
     core.setDone(done.id, true);
-    expect(core.addToToday(a.id).due).toBe('2026-09-28');
+    expect(core.addToToday(a.id).today).toBe(true);
     expect(core.canUndo()).toBe(true); // still the completion, not a move
-    expect(core.addToToday(done.id).due).toBe('2026-09-20');
+    expect(core.addToToday(done.id).today).toBeFalsy();
     expect(core.undo()).toBe('complete');
   });
 });
@@ -807,12 +837,11 @@ describe('list orders', () => {
     expect(order('shop')).toEqual(['الف شیر', 'ب نان', 'ج چای']);
   });
 
-  it('arranges the dashboard too, keeping overdue tasks in their own group', () => {
+  it('arranges Today too, on its own', () => {
     fill();
-    core.addTask({ title: 'دیروزی', due: '2026-09-27', priority: 'low' });
+    core.addAllToToday('shop');
     core.setDashboardOrder('priority');
     expect(core.dashboardOrder()).toBe('priority');
-    expect(titles(core.dashboard().overdue)).toEqual(['دیروزی']);
     expect(titles(core.dashboard().tasks)).toEqual(['الف شیر', 'ب نان', 'ج چای']);
     // The category list keeps its own order.
     expect(order('shop')).toEqual(['ب نان', 'ج چای', 'الف شیر']);
@@ -820,6 +849,7 @@ describe('list orders', () => {
 
   it('puts completed tasks last whatever the order', () => {
     fill();
+    core.addAllToToday('shop');
     const first = core.dashboard().tasks.find((t) => t.title === 'الف شیر')!;
     core.setDone(first.id, true);
     core.setDashboardOrder('title');

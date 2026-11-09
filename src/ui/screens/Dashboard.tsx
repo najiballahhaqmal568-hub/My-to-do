@@ -27,8 +27,12 @@ export function Dashboard() {
     <div className="screen" data-testid="dashboard">
       <header className="topbar">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="sub">{greeting}</div>
-          <h1 data-testid="today-date">{formatDay(lang, d.today)}</h1>
+          <h1>{t.dashboard}</h1>
+          <div className="sub">
+            <span data-testid="today-date">{formatDay(lang, d.today)}</span>
+            {' — '}
+            <span data-testid="today-count">{t.taskCount(list.length)}</span>
+          </div>
         </div>
         <button className="icon-btn" aria-label={t.stats} data-testid="open-stats" onClick={() => navigate({ name: 'stats' })}>
           <Icon name="chart" />
@@ -40,12 +44,49 @@ export function Dashboard() {
 
       <UpdateBanner />
 
+      <AnimatePresence>
+        {allDone && (
+          <motion.div className="celebrate" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={SPRING}>
+            {t.allDone}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <OrderBar value={core.dashboardOrder()} options={['time', 'newest', 'priority', 'title', 'manual']} onChange={(o) => core.setDashboardOrder(o)} />
+      {manual && openList.length > 1 && <p className="muted mode-hint">{t.orderHint}</p>}
+      {list.length === 0 ? (
+        <div className="empty">{t.nothingToday}</div>
+      ) : manual ? (
+        <>
+          {openList.length > 0 && <ManualList tasks={openList} onReorder={(ids) => core.reorderToday(ids)} showCategory showDate={false} todayButton={false} />}
+          {doneList.length > 0 && (
+            <div className="list">
+              <AnimatePresence initial={false}>
+                {doneList.map((task) => (
+                  <TaskRow key={task.id} task={task} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="list">
+          <AnimatePresence initial={false}>
+            {list.map((task) => (
+              <TaskRow key={task.id} task={task} />
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+
+      <h2 className="section-h">{t.dayOverview}</h2>
       <motion.section className="hero" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={SPRING}>
         <ProgressRing done={d.progress.done} total={d.progress.total} />
         <div>
+          <div className="sub">{greeting}</div>
           <h2 data-testid="progress-text">{allDone ? t.allDoneShort : d.progress.total ? t.tasksLeft(left) : t.today}</h2>
           <div className="chips">
-            {d.overdue.length > 0 && <span className="chip red">{t.overdueCount(d.overdue.length)}</span>}
             {core.settings.bedtimeEnabled && (
               <span className="chip">
                 <Icon name="bell" small />
@@ -60,8 +101,8 @@ export function Dashboard() {
       <div className="cat-grid">
         {cats.map((c, i) => {
           const p = d.categories.find((x) => x.categoryId === c.id)!;
-          // A category kept off the daily list shows up only while it has something for today.
-          if (c.daily === false && p.total === 0) return null;
+          // A category switched off for Today shows no card there.
+          if (c.daily === false) return null;
           return (
             <motion.button
               key={c.id}
@@ -91,61 +132,6 @@ export function Dashboard() {
           </motion.button>
         )}
       </div>
-
-      <AnimatePresence>
-        {allDone && (
-          <motion.div className="celebrate" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={SPRING}>
-            {t.allDone}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <h2 className="section-h">
-        {t.todaysTasks}
-        <span>{t.taskCount(list.length)}</span>
-      </h2>
-      <OrderBar value={core.dashboardOrder()} options={['time', 'newest', 'priority', 'title', 'manual']} onChange={(o) => core.setDashboardOrder(o)} />
-      {manual && openList.length > 1 && <p className="muted mode-hint">{t.orderHint}</p>}
-      {list.length === 0 ? (
-        <div className="empty">{t.nothingToday}</div>
-      ) : manual ? (
-        <>
-          {openList.length > 0 && <ManualList tasks={openList} onReorder={(ids) => core.reorderToday(ids)} showCategory showDate={false} todayButton={false} />}
-          {doneList.length > 0 && (
-            <div className="list">
-              <AnimatePresence initial={false}>
-                {doneList.map((task) => (
-                  <TaskRow key={task.id} task={task} />
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="list">
-          <AnimatePresence initial={false}>
-            {list.map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {d.undated.length > 0 && (
-        <section data-testid="undated">
-          <h2 className="section-h">
-            {t.noDate}
-            <span>{t.taskCount(d.undated.length)}</span>
-          </h2>
-          <div className="list">
-            <AnimatePresence initial={false}>
-              {d.undated.map((task) => (
-                <TaskRow key={task.id} task={task} />
-              ))}
-            </AnimatePresence>
-          </div>
-        </section>
-      )}
 
       <section className="tomorrow" id="tomorrow" data-testid="tomorrow">
         <div className="tomorrow-h">
